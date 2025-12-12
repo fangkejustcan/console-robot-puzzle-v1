@@ -11,8 +11,11 @@ console robot puzzle V1/
 ├── game.js             # 游戏主逻辑（p5.js）
 ├── objects.js          # 游戏物体类定义
 ├── alex.js             # AI助手Alex系统
+├── config.js           # 配置文件（包含API密钥，不提交到git）
+├── config.example.js   # 配置文件示例
 ├── game_design.md      # 游戏设计文档
 ├── README.md           # 使用说明
+├── .gitignore          # Git忽略文件
 └── claude.md           # 本文件，项目说明
 ```
 
@@ -20,8 +23,14 @@ console robot puzzle V1/
 - **前端框架**: 原生HTML/CSS/JavaScript
 - **图形库**: p5.js (用于游戏场景绘制)
 - **AI API**: DeepSeek API
-- **API Key**: sk-e34c5479a3754a6495e4d607232d7e49
 - **CORS代理**: https://corsproxy.io/ (解决跨域问题)
+
+## 配置说明
+
+### API密钥管理
+- `config.js`: 实际配置文件（包含API密钥，已在.gitignore中）
+- `config.example.js`: 配置文件模板
+- 首次使用需要复制 `config.example.js` 为 `config.js` 并填入API密钥
 
 ## 技术实现细节
 
@@ -152,6 +161,14 @@ Alex在对话中直接写出此命令，系统会自动执行
   - 代码撕裂器使用后自动切回普通模式
   - 删除测试按钮，保持界面简洁
   - 信纸添加装饰横线，提升视觉效果
+- ✅ **安全性改进**:
+  - 将API密钥提取到独立配置文件
+  - 创建.gitignore保护敏感信息
+  - 提供config.example.js作为配置模板
+
+## Git仓库
+- GitHub: https://github.com/fangkejustcan/console-robot-puzzle-v1
+- 分支: main
 
 ## 待测试项目
 - [ ] 游戏完整流程测试
