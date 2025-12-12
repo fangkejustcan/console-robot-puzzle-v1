@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代码迷宫 - Console Robot Puzzle</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <script src="config.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 左侧游戏场景 70% -->
+        <div class="game-scene" id="gameScene">
+            <div class="tool-bar">
+                <button id="normalMode" class="tool-btn active">普通模式</button>
+                <button id="ripperMode" class="tool-btn">代码撕裂器</button>
+            </div>
+        </div>
+
+        <!-- 右侧AI对话区 30% -->
+        <div class="chat-container">
+            <div class="chat-header">
+                <h2>AI助手 Alex</h2>
+                <div class="status">在线</div>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                <div class="message alex-message">
+                    <div class="message-content">
+                        你好，我是Alex。我可以看到这个游戏的代码结构。使用代码撕裂器点击物体，我就能帮你分析它们背后的代码逻辑。
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-input-container">
+                <textarea id="chatInput" placeholder="向Alex发送消息..."></textarea>
+                <button id="sendBtn">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="objects.js"></script>
+    <script src="game.js"></script>
+    <script src="alex.js"></script>
+</body>
+</html>
