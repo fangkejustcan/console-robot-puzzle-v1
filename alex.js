@@ -420,9 +420,19 @@ async function sendAutoMessage() {
 
         processAlexEditCommands(alexReply);
 
+        // AI回复完成后，结束分析动画
+        if (typeof finishAnalyzing === 'function') {
+            finishAnalyzing();
+        }
+
     } catch (error) {
         loadingMsg.remove();
         addAlexMessage(`分析失败: ${error.message}`);
+
+        // 即使失败也要结束分析动画
+        if (typeof finishAnalyzing === 'function') {
+            finishAnalyzing();
+        }
     }
 }
 

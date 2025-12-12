@@ -13,8 +13,16 @@
         <!-- 左侧游戏场景 70% -->
         <div class="game-scene" id="gameScene">
             <div class="tool-bar">
-                <button id="normalMode" class="tool-btn active">普通模式</button>
-                <button id="ripperMode" class="tool-btn">代码撕裂器</button>
+                <div class="toggle-container">
+                    <span class="toggle-label">代码撕裂器</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="ripperToggle">
+                        <span class="toggle-slider">
+                            <span class="toggle-text-off">OFF</span>
+                            <span class="toggle-text-on">ON</span>
+                        </span>
+                    </label>
+                </div>
             </div>
         </div>
 

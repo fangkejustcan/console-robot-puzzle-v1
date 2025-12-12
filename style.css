@@ -28,10 +28,126 @@ body {
 .tool-bar {
     position: absolute;
     top: 20px;
-    left: 20px;
+    right: 20px;
     z-index: 100;
     display: flex;
     gap: 10px;
+}
+
+/* Toggle开关容器 */
+.toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+}
+
+.toggle-label {
+    color: #00ff00;
+    font-size: 14px;
+    font-weight: bold;
+    text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+}
+
+/* Toggle开关 */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 80px;
+    height: 36px;
+    cursor: pointer;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #333;
+    border: 2px solid #555;
+    border-radius: 18px;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px;
+}
+
+.toggle-slider::before {
+    content: "";
+    position: absolute;
+    height: 28px;
+    width: 28px;
+    left: 3px;
+    bottom: 2px;
+    background-color: #666;
+    border-radius: 50%;
+    transition: all 0.3s;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.toggle-text-off,
+.toggle-text-on {
+    font-size: 10px;
+    font-weight: bold;
+    z-index: 1;
+    transition: opacity 0.3s;
+}
+
+.toggle-text-off {
+    color: #999;
+    opacity: 1;
+}
+
+.toggle-text-on {
+    color: #000;
+    opacity: 0;
+}
+
+/* Toggle开关激活状态 */
+.toggle-switch input:checked + .toggle-slider {
+    background-color: #00ff00;
+    border-color: #00ff00;
+    box-shadow: 0 0 15px rgba(0, 255, 0, 0.6);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(44px);
+    background-color: #000;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.toggle-switch input:checked + .toggle-slider .toggle-text-off {
+    opacity: 0;
+}
+
+.toggle-switch input:checked + .toggle-slider .toggle-text-on {
+    opacity: 1;
+}
+
+/* Hover效果 */
+.toggle-switch:hover .toggle-slider {
+    border-color: #00ff00;
+}
+
+.toggle-switch input:checked:hover + .toggle-slider {
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+}
+
+/* 禁用状态 */
+.toggle-switch input:disabled + .toggle-slider {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .tool-btn {
@@ -43,6 +159,9 @@ body {
     cursor: pointer;
     font-size: 14px;
     transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .tool-btn:hover {
@@ -204,6 +323,17 @@ body {
 /* p5.js canvas 样式 */
 canvas {
     display: block;
+}
+
+/* 代码撕裂器模式的绿色十字准星指针 */
+.ripper-cursor-active {
+    cursor: crosshair;
+    filter: hue-rotate(90deg) saturate(2);
+}
+
+/* 自定义绿色十字准星cursor */
+.green-crosshair {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><line x1="12" y1="0" x2="12" y2="24" stroke="%2300ff00" stroke-width="2"/><line x1="0" y1="12" x2="24" y2="12" stroke="%2300ff00" stroke-width="2"/><circle cx="12" cy="12" r="6" fill="none" stroke="%2300ff00" stroke-width="2"/></svg>') 12 12, crosshair;
 }
 
 /* 代码信息提示 */
