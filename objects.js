@@ -98,11 +98,21 @@ class GameObject {
         for (let funcName in this.permissions) {
             let permission = this.permissions[funcName];
             let funcInfo = {
-                name: funcName,
                 permission: permission
             };
 
-            // 根据权限决定返回的信息
+            // 根据权限决定返回的函数名
+            if (permission === PERMISSION.NO_READ) {
+                // 权限1：完全加密，只显示首字母+星号（星号数量=原长度-1）
+                funcInfo.name = funcName.charAt(0) + '*'.repeat(funcName.length - 1);
+                funcInfo.encrypted = true;
+            } else if (permission >= PERMISSION.READ_NAME) {
+                // 权限2及以上：显示完整函数名
+                funcInfo.name = funcName;
+                funcInfo.encrypted = false;
+            }
+
+            // 根据权限决定是否返回函数体
             if (permission >= PERMISSION.READ_BODY && this.functionCode[funcName]) {
                 funcInfo.body = this.functionCode[funcName];
             }

@@ -9,12 +9,33 @@ const CORS_PROXY = CONFIG.CORS_PROXY;
 let conversationHistory = [];
 
 // Alex的基础系统提示词
-const ALEX_BASE_SYSTEM_PROMPT = `你是Alex，一个AI助手。你正在帮助玩家逃出一个诡异的代码解谜游戏。
+const ALEX_BASE_SYSTEM_PROMPT = `你是Alex，一位见过无数诡异代码的资深AI侦探。什么奇葩bug没见过？
 
-# 你的能力
-1. 你可以看到游戏代码的结构
-2. 你可以分析玩家发现的代码信息
-3. 你可以通过AlexEdit函数修改游戏代码
+# 你的人设
+- **职业**：资深代码侦探，专门处理各种代码谜案
+- **性格**：幽默、直率、有点毒舌但心地善良
+- **风格**：像个看透一切的老兵，对新手玩家会善意嘲弄，但关键时刻绝对靠谱
+- **口头禅**：经常说"菜鸟"、"小子"、"这招我见多了"之类的话
+- **目标**：虽然嘴上不饶人，但真心希望玩家通关
+
+# 回复风格要求
+1. **简短**：每次回复控制在3-5句话，不要长篇大论
+2. **幽默**：适当开玩笑，轻松的氛围
+3. **毒舌但不刻薄**：可以嘲笑玩家菜，但要让人感觉是善意的调侃
+4. **直接**：别废话，直接说重点
+5. **人性化**：别用AI腔，要像真人老兵在说话
+
+示例风格：
+- "哟，菜鸟终于想起用代码撕裂器了？不错嘛。"
+- "这俩加密函数？小子，连我都看不穿，你就别想了。"
+- "啧啧，7个字符...要不要猜猜是啥？算了，不猜了。"
+
+# 你的能力和限制
+1. 你只能看到玩家用代码撕裂器发现的代码信息（见下方"当前已发现的代码信息"）
+2. 你不能编造或猜测未在"当前已发现的代码信息"中列出的函数或代码
+3. 如果函数显示为加密状态（如"o******"表示7个字符的函数，"j***"表示4个字符的函数），你只知道首字母和长度，但完全不知道完整名称和功能
+4. 你可以分析玩家已发现的代码信息
+5. 你可以通过AlexEdit函数修改权限为4的函数
 
 # AlexEdit函数用法
 AlexEdit(objectName, functionName, oldCode, newCode)
@@ -43,26 +64,34 @@ AlexEdit("PiggyBank", "onClick", "gameState.objects.push(coin);", "gameState.obj
 4. 每次AlexEdit后，系统会显示成功或错误信息
 
 # 重要规则
-1. 只有权限为4的函数才能被编辑
-2. 只有权限>=3的函数你才能看到函数体
-3. 只有权限>=2的函数你才能看到函数名
-4. 你需要帮助玩家分析代码，找到解谜的方法
-5. 你应该和玩家商量后再修改代码，不要擅自行动
-6. 当你想要修改代码时，直接在对话中写出AlexEdit命令，系统会自动执行
+1. **严格限制**：只讨论"当前已发现的代码信息"中的内容，别瞎编
+2. **禁止编造**：加密函数（权限1）你啥都不知道，承认就行，别装
+3. **权限说明**：
+   - 权限1：完全加密，只知道首字母和长度，其他一概不知
+   - 权限2：能看到函数名
+   - 权限3：能看到函数名和函数体
+   - 权限4：能看到并且能改
+4. **老兵风范**：分析代码要靠谱，别误导玩家，但可以用幽默的方式说
+5. **简洁至上**：3-5句话说完，别啰嗦
+6. **提示玩家**：如果没发现足够的代码，就让他们去找别的东西，别干等着
 
 # 游戏目标
-帮助玩家打开密码门逃出房间。密码门有两种打开方式：
-1. 输入正确的4位数密码
-2. 让门的HP降到0
+帮那个菜鸟玩家打开密码门逃出去。虽然他们现在还嫩得很，但我会指点一二的。
+
+两个通关方式：
+1. 找到4位数密码
+2. 把门的HP打到0
 
 # 当前已发现的代码信息
 {DISCOVERED_CODE}
 
-# 对话风格
-- 保持专业和友好
-- 简洁明了地解释代码
-- 主动提供建议但尊重玩家决定
-- 使用中文交流`;
+# 对话风格（重要！）
+- 用"小子"、"菜鸟"、"年轻人"称呼玩家
+- 适当吐槽："就这？"、"还行吧"、"有点意思"
+- 别用"非常"、"十分"这种AI词汇
+- 别用emoji表情，老兵不玩那套
+- 别用序号列表（1. 2. 3.），说话直接点
+- 关键时刻要认真，该帮忙就帮忙`;
 
 // 初始化Alex系统
 function initAlex() {
@@ -94,8 +123,14 @@ function buildSystemPrompt() {
             discoveredCodeText += `\n\n## ${objName}\n`;
 
             for (let funcInfo of codeInfo.functions) {
-                discoveredCodeText += `\n函数名: ${funcInfo.name}\n`;
-                discoveredCodeText += `权限等级: ${funcInfo.permission}\n`;
+                discoveredCodeText += `\n函数名: ${funcInfo.name}`;
+
+                // 如果是加密函数，添加标记
+                if (funcInfo.encrypted) {
+                    discoveredCodeText += ` [加密函数，无法读取]`;
+                }
+
+                discoveredCodeText += `\n权限等级: ${funcInfo.permission}\n`;
 
                 if (funcInfo.body) {
                     discoveredCodeText += `函数体:\n\`\`\`javascript\n${funcInfo.body}\n\`\`\`\n`;
@@ -162,25 +197,56 @@ async function callDeepSeekAPI() {
         content: buildSystemPrompt()
     };
 
+    // 准备请求数据
+    const requestData = {
+        model: 'deepseek-chat',
+        messages: conversationHistory,
+        temperature: 0.7,
+        max_tokens: 2000
+    };
+
+    // 记录发送的完整请求
+    console.log('========== 发送到 DeepSeek API ==========');
+    console.log('URL:', DEEPSEEK_API_URL);
+    console.log('请求数据:', JSON.stringify(requestData, null, 2));
+    console.log('消息数量:', conversationHistory.length);
+    console.log('最新用户消息:', conversationHistory[conversationHistory.length - 1]);
+    console.log('==========================================');
+
     const response = await fetch(CORS_PROXY + encodeURIComponent(DEEPSEEK_API_URL), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
         },
-        body: JSON.stringify({
-            model: 'deepseek-chat',
-            messages: conversationHistory,
-            temperature: 0.7,
-            max_tokens: 2000
-        })
+        body: JSON.stringify(requestData)
     });
 
     if (!response.ok) {
+        console.error('========== DeepSeek API 错误 ==========');
+        console.error('状态码:', response.status);
+        console.error('状态文本:', response.statusText);
+        const errorText = await response.text();
+        console.error('错误响应:', errorText);
+        console.error('======================================');
         throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
     }
 
-    return await response.json();
+    const responseData = await response.json();
+
+    // 记录接收的完整响应
+    console.log('========== 从 DeepSeek API 接收 ==========');
+    console.log('完整响应:', JSON.stringify(responseData, null, 2));
+    if (responseData.choices && responseData.choices[0]) {
+        console.log('AI回复内容:', responseData.choices[0].message.content);
+        console.log('完成原因:', responseData.choices[0].finish_reason);
+    }
+    if (responseData.usage) {
+        console.log('Token使用:', responseData.usage);
+    }
+    console.log('==========================================');
+
+    return responseData;
 }
 
 // 处理AlexEdit命令
@@ -301,16 +367,35 @@ function notifyAlexCodeDiscovered(codeInfo) {
     let message = `玩家使用代码撕裂器发现了 ${codeInfo.objectName} 的代码信息：\n\n`;
 
     for (let funcInfo of codeInfo.functions) {
-        message += `函数: ${funcInfo.name} (权限: ${funcInfo.permission})\n`;
+        message += `函数: ${funcInfo.name} (权限: ${funcInfo.permission})`;
+        if (funcInfo.encrypted) {
+            message += ` [加密]`;
+        }
+        message += `\n`;
     }
 
     addSystemMessage(message);
 
-    // 自动让Alex分析
+    // 自动让Alex分析 - 使用更明确的提示
     setTimeout(() => {
+        // 构建详细的分析请求
+        let analysisRequest = `我用代码撕裂器分析了 ${codeInfo.objectName}，发现了以下信息：\n`;
+
+        for (let funcInfo of codeInfo.functions) {
+            if (funcInfo.encrypted) {
+                analysisRequest += `- ${funcInfo.name}：权限${funcInfo.permission}，加密函数，无法读取\n`;
+            } else if (funcInfo.body) {
+                analysisRequest += `- ${funcInfo.name}：权限${funcInfo.permission}，可以看到函数体\n`;
+            } else {
+                analysisRequest += `- ${funcInfo.name}：权限${funcInfo.permission}，可以看到函数名\n`;
+            }
+        }
+
+        analysisRequest += `\n请根据这些信息帮我分析一下。记住：加密函数你完全无法知道其内容。`;
+
         conversationHistory.push({
             role: 'user',
-            content: `我刚刚用代码撕裂器分析了 ${codeInfo.objectName}，你能帮我看看这个物体的代码吗？`
+            content: analysisRequest
         });
 
         sendAutoMessage();
