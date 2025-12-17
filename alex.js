@@ -38,30 +38,46 @@ const ALEX_BASE_SYSTEM_PROMPT = `你是Alex，一位见过无数诡异代码的�
 5. 你可以通过AlexEdit函数修改权限为4的函数
 
 # AlexEdit函数用法
-AlexEdit(objectName, functionName, oldCode, newCode)
+AlexEdit(objectName, functionName, newCode, newDescription)
 - objectName: 物体名称（如"PiggyBank"）
 - functionName: 函数名称（如"onClick"）
-- oldCode: 要替换的旧代码片段（必须完全匹配原代码中的内容）
-- newCode: 新的代码片段
+- newCode: 新的完整函数代码（会直接覆盖原函数）
+- newDescription: 新的自然语言描述（可选，格式如：<func>点击时</func>：<func>生成</func>10个<class>金币</class>）
 
 ## AlexEdit使用示例
-假设存钱罐的onClick函数代码是：
+假设存钱罐的onClick函数原代码是：
 \`\`\`
+// 在自己位置下方随机范围内生成硬币
+let coinX = this.x + random(-30, 30);
+let coinY = this.y + this.height/2 + random(20, 50);
 let coin = new Coin(coinX, coinY);
 gameState.objects.push(coin);
+addSystemMessage('存钱罐掉出了一枚硬币！');
 \`\`\`
 
-要批量生成10个硬币，应该这样写：
-AlexEdit("PiggyBank", "onClick", "let coin = new Coin(coinX, coinY);", "for(let i=0; i<10; i++) { let coin = new Coin(coinX, coinY);")
-
-然后再添加：
-AlexEdit("PiggyBank", "onClick", "gameState.objects.push(coin);", "gameState.objects.push(coin); }")
+要批量生成10个硬币，直接写完整的新函数和描述：
+AlexEdit("PiggyBank", "onClick", "for(let i=0; i<10; i++) { let coinX = this.x + random(-30, 30); let coinY = this.y + this.height/2 + random(20, 50); let coin = new Coin(coinX, coinY); gameState.objects.push(coin); }", "<func>点击时</func>：<func>生成</func>10个<class>金币</class>")
 
 ## 重要提示
 1. 直接在回复中写 AlexEdit(...) 命令，不要放在代码块中
-2. oldCode 必须精确匹配原代码的片段
-3. 如果修改较复杂，可以分多次AlexEdit执行
-4. 每次AlexEdit后，系统会显示成功或错误信息
+2. newCode 是完整的函数体代码，会完全替换原函数
+3. newDescription 必须使用<func>和<class>标签标记词条，这样玩家可以看到并收集这些词条
+4. 每次AlexEdit后，系统会显示成功或错误信息，并更新场景中的代码卡片显示
+5. 只能修改权限为4的函数
+6. **重要**：newCode中避免使用任何引号(单引号或双引号)，包括字符串字面量
+   - 如果必须使用addSystemMessage，就省略它，让代码更简洁
+   - 专注于核心逻辑，不要添加消息提示
+
+## 自然语言描述格式要求
+描述必须使用XML标签标记词条：
+- <func>函数名或动作</func>：标记函数相关的词条（显示为绿色）
+- <class>类名</class>：标记类名词条（显示为青色）
+- 其他文字：作为连接词，不需要标签
+
+示例：
+- "<func>点击时</func>：<func>生成</func>一个<class>金币</class>"
+- "<func>拖动时</func>：<func>移动</func>位置"
+- "<func>碰撞时</func>：<func>显示</func><func>隐藏文字</func>"
 
 # 重要规则
 1. **严格限制**：只讨论"当前已发现的代码信息"中的内容，别瞎编
@@ -120,7 +136,13 @@ function buildSystemPrompt() {
     } else {
         for (let objName in gameState.discoveredCode) {
             let codeInfo = gameState.discoveredCode[objName];
-            discoveredCodeText += `\n\n## ${objName}\n`;
+            discoveredCodeText += `\n\n## ${objName}`;
+
+            // 添加类名信息
+            if (codeInfo.className) {
+                discoveredCodeText += ` (类型: ${codeInfo.className})`;
+            }
+            discoveredCodeText += `\n`;
 
             for (let funcInfo of codeInfo.functions) {
                 discoveredCodeText += `\n函数名: ${funcInfo.name}`;
@@ -143,15 +165,25 @@ function buildSystemPrompt() {
 }
 
 // 发送消息
-async function sendMessage() {
-    let input = document.getElementById('chatInput');
-    let message = input.value.trim();
+async function sendMessage(messageText = null, showInUI = true) {
+    let message;
+
+    if (messageText) {
+        // 从代码调用，使用传入的消息
+        message = messageText;
+    } else {
+        // 从UI调用，从输入框读取
+        let input = document.getElementById('chatInput');
+        message = input.value.trim();
+        input.value = '';
+    }
 
     if (!message) return;
 
-    // 显示玩家消息
-    addPlayerMessage(message);
-    input.value = '';
+    // 显示玩家消息（如果需要）
+    if (showInUI) {
+        addPlayerMessage(message);
+    }
 
     // 添加到对话历史
     conversationHistory.push({
@@ -253,17 +285,18 @@ async function callDeepSeekAPI() {
 function processAlexEditCommands(text) {
     console.log('处理Alex回复，查找AlexEdit命令:', text);
 
-    // 更宽松的正则表达式，支持单引号、双引号、反引号
-    // 支持多行和特殊字符
-    const regex = /AlexEdit\s*\(\s*["'`](.*?)["'`]\s*,\s*["'`](.*?)["'`]\s*,\s*["'`]([\s\S]*?)["'`]\s*,\s*["'`]([\s\S]*?)["'`]\s*\)/g;
+    // 修改正则表达式：匹配3个或4个参数
+    // AlexEdit(objectName, functionName, newCode) 或
+    // AlexEdit(objectName, functionName, newCode, newDescription)
+    const regex = /AlexEdit\s*\(\s*["'`](.*?)["'`]\s*,\s*["'`](.*?)["'`]\s*,\s*["'`]([\s\S]*?)["'`](?:\s*,\s*["'`]([\s\S]*?)["'`])?\s*\)/g;
     let match;
     let foundCommands = false;
 
     while ((match = regex.exec(text)) !== null) {
         foundCommands = true;
-        let [fullMatch, objectName, functionName, oldCode, newCode] = match;
-        console.log('找到AlexEdit命令:', {objectName, functionName, oldCode, newCode});
-        executeAlexEdit(objectName, functionName, oldCode, newCode);
+        let [fullMatch, objectName, functionName, newCode, newDescription] = match;
+        console.log('找到AlexEdit命令:', {objectName, functionName, newCode, newDescription});
+        executeAlexEdit(objectName, functionName, newCode, newDescription);
     }
 
     if (!foundCommands) {
@@ -272,8 +305,8 @@ function processAlexEditCommands(text) {
 }
 
 // 执行AlexEdit命令
-function executeAlexEdit(objectName, functionName, oldCode, newCode) {
-    console.log('开始执行AlexEdit:', {objectName, functionName});
+function executeAlexEdit(objectName, functionName, newCode, newDescription = null) {
+    console.log('开始执行AlexEdit:', {objectName, functionName, newDescription});
 
     // 查找对象
     let obj = gameState.objects.find(o => o.name === objectName);
@@ -302,36 +335,61 @@ function executeAlexEdit(objectName, functionName, oldCode, newCode) {
         return;
     }
 
-    // 获取原函数代码
+    // 获取原函数代码（用于日志）
     let originalCode = obj.functionCode[functionName];
     console.log('原代码:', originalCode);
 
-    // 检查oldCode是否存在
-    if (!originalCode.includes(oldCode)) {
-        console.error('未找到旧代码片段:', oldCode);
-        addSystemMessage(`❌ AlexEdit错误: 未找到代码片段 "${oldCode}"`);
-        return;
-    }
-
-    // 替换代码
+    // 直接覆盖代码
     try {
-        // 直接替换functionCode中的代码字符串
-        obj.functionCode[functionName] = originalCode.replace(oldCode, newCode);
+        // 直接用新代码覆盖functionCode
+        obj.functionCode[functionName] = newCode;
         console.log('新代码:', obj.functionCode[functionName]);
+
+        // 如果提供了新的自然语言描述，也更新它
+        if (newDescription) {
+            obj.naturalDescription[functionName] = newDescription;
+            console.log('新描述:', newDescription);
+        }
 
         addSystemMessage(`✅ AlexEdit成功: 已修改 ${objectName}.${functionName}`);
 
         // 更新已发现代码信息
         if (gameState.discoveredCode[objectName]) {
             let funcInfo = gameState.discoveredCode[objectName].functions.find(f => f.name === functionName);
-            if (funcInfo && funcInfo.body) {
-                funcInfo.body = obj.functionCode[functionName];
+            if (funcInfo) {
+                if (funcInfo.body) {
+                    funcInfo.body = obj.functionCode[functionName];
+                }
+                // 更新自然语言描述
+                if (newDescription) {
+                    funcInfo.naturalDescription = newDescription;
+                }
             }
         }
+
+        // 刷新代码卡片显示
+        refreshCodeCard(objectName);
 
     } catch (error) {
         console.error('执行错误:', error);
         addSystemMessage(`❌ AlexEdit错误: ${error.message}`);
+    }
+}
+
+// 刷新代码卡片显示
+function refreshCodeCard(objectName) {
+    // 删除旧的代码卡片
+    if (gameState.codeCards[objectName]) {
+        gameState.codeCards[objectName].remove();
+        delete gameState.codeCards[objectName];
+    }
+
+    // 如果在代码撕裂器模式，重新创建卡片
+    if (gameState.mode === 'ripper') {
+        const obj = gameState.objects.find(o => o.name === objectName);
+        if (obj && gameState.discoveredCode[objectName]) {
+            createCodeCardForObject(obj);
+        }
     }
 }
 

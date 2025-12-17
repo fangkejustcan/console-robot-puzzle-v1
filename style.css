@@ -21,7 +21,7 @@ body {
 .game-scene {
     width: 70%;
     height: 100%;
-    position: relative;
+    position: relative; /* 确保子元素的absolute定位相对于此容器 */
     background: #16213e;
 }
 
@@ -323,6 +323,8 @@ body {
 /* p5.js canvas 样式 */
 canvas {
     display: block;
+    position: relative;
+    z-index: 1; /* 确保canvas在overlay下面 */
 }
 
 /* 代码撕裂器模式的绿色十字准星指针 */
@@ -355,3 +357,710 @@ canvas {
 .code-info .permission {
     color: #e94560;
 }
+
+/* ========== 代码信息覆盖层样式 ========== */
+.code-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* 默认让点击穿透 */
+    z-index: 50;
+}
+
+/* 只有卡片区域可以交互 */
+.code-card {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.85);
+    border: 2px solid #00ff00;
+    border-radius: 6px;
+    padding: 8px 12px;
+    pointer-events: auto; /* 卡片本身可以交互 */
+    max-width: 300px;
+    box-shadow: 0 4px 12px rgba(0, 255, 0, 0.3);
+}
+
+.code-card-function {
+    margin-bottom: 6px;
+    line-height: 1.6;
+    font-size: 13px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+
+.code-card-function:last-child {
+    margin-bottom: 0;
+}
+
+.code-card-text {
+    color: #eee;
+}
+
+/* 场景中的可收集词条 */
+.scene-token {
+    display: inline-flex;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+    border: 1.5px solid;
+    pointer-events: auto; /* 确保可以点击 */
+}
+
+.scene-token.token-func {
+    background: rgba(0, 255, 0, 0.3);
+    border-color: #00ff00;
+    color: #00ff00;
+    box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+}
+
+.scene-token.token-class {
+    background: rgba(78, 204, 163, 0.3);
+    border-color: #4ecca3;
+    color: #4ecca3;
+    box-shadow: 0 0 5px rgba(78, 204, 163, 0.3);
+}
+
+.scene-token:hover {
+    transform: scale(1.1);
+    filter: brightness(1.3);
+}
+
+.scene-token.collected {
+    opacity: 0.4;
+    cursor: default;
+    background: rgba(100, 100, 100, 0.3);
+    border-color: #666;
+    color: #999;
+    box-shadow: none;
+}
+
+.scene-token.collected:hover {
+    transform: none;
+    filter: none;
+}
+
+/* ========== 词条库样式 ========== */
+.token-library {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 120px;
+    background: rgba(0, 0, 0, 0.9);
+    border-top: 2px solid #4ecca3;
+    backdrop-filter: blur(10px);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 编辑器打开时，提升词条库的z-index */
+.token-library.editor-active {
+    z-index: 1001;
+}
+
+.token-library-header {
+    padding: 8px 15px;
+    background: rgba(78, 204, 163, 0.2);
+    border-bottom: 1px solid #4ecca3;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.token-library-title {
+    color: #4ecca3;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.token-count {
+    background: #4ecca3;
+    color: #1a1a2e;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.token-list {
+    padding: 10px 15px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+}
+
+.token-item {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: grab;
+    transition: all 0.2s;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.token-item:active {
+    cursor: grabbing;
+}
+
+/* 点击动画 */
+@keyframes token-click {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(0.9); }
+}
+
+.token-item:active:not([draggable="true"]:active) {
+    animation: token-click 0.2s ease;
+}
+
+/* func类型词条 - 绿色 */
+.token-item.token-func {
+    background: rgba(0, 255, 0, 0.2);
+    border: 1px solid #00ff00;
+    color: #00ff00;
+}
+
+.token-item.token-func:hover {
+    background: rgba(0, 255, 0, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 255, 0, 0.3);
+}
+
+/* class类型词条 - 青色 */
+.token-item.token-class {
+    background: rgba(78, 204, 163, 0.2);
+    border: 1px solid #4ecca3;
+    color: #4ecca3;
+}
+
+.token-item.token-class:hover {
+    background: rgba(78, 204, 163, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(78, 204, 163, 0.3);
+}
+
+/* 词条库滚动条 */
+.token-list::-webkit-scrollbar {
+    height: 6px;
+}
+
+.token-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+.token-list::-webkit-scrollbar-thumb {
+    background: #4ecca3;
+    border-radius: 3px;
+}
+
+.token-list::-webkit-scrollbar-thumb:hover {
+    background: #3db88f;
+}
+
+/* ========== 代码查看窗口样式 ========== */
+.code-viewer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.code-viewer {
+    width: 700px;
+    max-height: 80vh;
+    background: #16213e;
+    border: 3px solid #00ff00;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 255, 0, 0.3);
+}
+
+.viewer-header {
+    padding: 20px;
+    background: #0f3460;
+    border-bottom: 2px solid #00ff00;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 10px 10px 0 0;
+}
+
+.viewer-header h3 {
+    margin: 0;
+    color: #00ff00;
+    font-size: 18px;
+    text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.viewer-content {
+    padding: 20px;
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.function-card {
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid #533483;
+    border-radius: 8px;
+    padding: 15px;
+    transition: all 0.3s;
+}
+
+.function-card:hover {
+    border-color: #00ff00;
+    box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);
+}
+
+.function-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #533483;
+}
+
+.function-name {
+    color: #4ecca3;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.function-permission {
+    color: #e94560;
+    font-size: 12px;
+    padding: 4px 10px;
+    background: rgba(233, 69, 96, 0.2);
+    border-radius: 12px;
+}
+
+.function-description {
+    color: #eee;
+    font-size: 14px;
+    line-height: 1.8;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.function-description.encrypted {
+    color: #666;
+    font-style: italic;
+}
+
+/* 代码查看窗口中的可收集词条 */
+.collectable-token {
+    display: inline-flex;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+    position: relative;
+}
+
+.collectable-token.token-func {
+    background: rgba(0, 255, 0, 0.2);
+    border: 1px solid #00ff00;
+    color: #00ff00;
+}
+
+.collectable-token.token-class {
+    background: rgba(78, 204, 163, 0.2);
+    border: 1px solid #4ecca3;
+    color: #4ecca3;
+}
+
+.collectable-token:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 255, 0, 0.4);
+}
+
+.collectable-token.collected {
+    opacity: 0.5;
+    cursor: default;
+    background: rgba(100, 100, 100, 0.2);
+    border-color: #666;
+    color: #666;
+}
+
+.collectable-token.collected:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+/* 收集提示 */
+.collect-hint {
+    position: absolute;
+    top: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #00ff00;
+    color: #000;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.collectable-token:hover .collect-hint {
+    opacity: 1;
+}
+
+.collectable-token.collected:hover .collect-hint {
+    opacity: 0;
+}
+
+.viewer-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #533483;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.close-btn-footer {
+    background: #533483;
+    color: #eee;
+}
+
+.close-btn-footer:hover {
+    background: #6b4399;
+}
+
+/* 代码查看窗口滚动条 */
+.viewer-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.viewer-content::-webkit-scrollbar-track {
+    background: #0f3460;
+}
+
+.viewer-content::-webkit-scrollbar-thumb {
+    background: #00ff00;
+    border-radius: 4px;
+}
+
+.viewer-content::-webkit-scrollbar-thumb:hover {
+    background: #5effc3;
+}
+
+/* 收集动画 */
+@keyframes collect-bounce {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+/* 代码卡片中的内联编辑按钮 */
+.inline-edit-btn {
+    padding: 2px 8px;
+    margin-left: 8px;
+    background: rgba(78, 204, 163, 0.2);
+    border: 1px solid #4ecca3;
+    border-radius: 4px;
+    color: #4ecca3;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    vertical-align: middle;
+}
+
+.inline-edit-btn:hover {
+    background: rgba(78, 204, 163, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(78, 204, 163, 0.3);
+}
+
+/* ========== 函数编辑窗口样式 ========== */
+.function-editor-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* 为词条库留出底部空间 */
+    padding-bottom: 120px;
+}
+
+.function-editor {
+    width: 600px;
+    max-height: 80vh;
+    background: #16213e;
+    border: 3px solid #4ecca3;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.editor-header {
+    padding: 20px;
+    background: #0f3460;
+    border-bottom: 2px solid #4ecca3;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 10px 10px 0 0;
+}
+
+.editor-header h3 {
+    margin: 0;
+    color: #4ecca3;
+    font-size: 18px;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: #e94560;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.3s;
+}
+
+.close-btn:hover {
+    background: rgba(233, 69, 96, 0.2);
+    transform: rotate(90deg);
+}
+
+.editor-content {
+    padding: 20px;
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.editor-info {
+    display: flex;
+    gap: 10px;
+    padding: 10px;
+    background: rgba(78, 204, 163, 0.1);
+    border-radius: 6px;
+    border: 1px solid #4ecca3;
+}
+
+.info-label {
+    color: #4ecca3;
+    font-weight: bold;
+}
+
+.info-value {
+    color: #eee;
+}
+
+.editor-workspace {
+    min-height: 150px;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px dashed #533483;
+    border-radius: 8px;
+    line-height: 2;
+    font-size: 14px;
+    color: #eee;
+    outline: none;
+    cursor: text;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.editor-workspace:focus {
+    border-color: #4ecca3;
+    border-style: solid;
+    background: rgba(78, 204, 163, 0.05);
+}
+
+.editor-workspace.drop-active {
+    border-color: #4ecca3;
+    background: rgba(78, 204, 163, 0.1);
+}
+
+.editor-workspace.readonly {
+    cursor: default;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* 占位符 */
+.editor-workspace:empty:before {
+    content: attr(data-placeholder);
+    color: #666;
+    font-style: italic;
+}
+
+.editor-workspace:empty:not(.readonly) {
+    border-style: dashed;
+}
+
+/* 编辑器中的词条 */
+.editor-token {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: move;
+    position: relative;
+    transition: all 0.2s;
+    display: inline-block;
+    margin: 2px;
+}
+
+.editor-token.token-func {
+    background: rgba(0, 255, 0, 0.3);
+    border: 1px solid #00ff00;
+    color: #00ff00;
+}
+
+.editor-token.token-class {
+    background: rgba(78, 204, 163, 0.3);
+    border: 1px solid #4ecca3;
+    color: #4ecca3;
+}
+
+.editor-token:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(78, 204, 163, 0.4);
+}
+
+/* 拖拽状态 */
+.editor-token.dragging {
+    opacity: 0.5;
+    transform: scale(0.95);
+}
+
+/* 拖拽悬停目标 */
+.editor-token.drag-over {
+    border-color: #4ecca3;
+    box-shadow: 0 0 15px rgba(78, 204, 163, 0.6);
+    transform: translateX(5px);
+}
+
+/* 删除按钮 */
+.editor-token .delete-token {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 18px;
+    height: 18px;
+    background: #e94560;
+    border: 2px solid #16213e;
+    border-radius: 50%;
+    color: white;
+    font-size: 12px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.editor-token:hover .delete-token {
+    display: flex;
+}
+
+.editor-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding-top: 20px;
+    border-top: 1px solid #533483;
+}
+
+.action-btn {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 14px;
+}
+
+.cancel-btn {
+    background: #533483;
+    color: #eee;
+}
+
+.cancel-btn:hover {
+    background: #6b4399;
+    transform: translateY(-2px);
+}
+
+.generate-btn {
+    background: #4ecca3;
+    color: #1a1a2e;
+}
+
+.generate-btn:hover {
+    background: #5effc3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(78, 204, 163, 0.4);
+}
+
+.generate-btn:disabled {
+    background: #333;
+    color: #666;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* 编辑器内容滚动条 */
+.editor-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.editor-content::-webkit-scrollbar-track {
+    background: #0f3460;
+}
+
+.editor-content::-webkit-scrollbar-thumb {
+    background: #4ecca3;
+    border-radius: 4px;
+}
+
+.editor-content::-webkit-scrollbar-thumb:hover {
+    background: #5effc3;
+}
+
+

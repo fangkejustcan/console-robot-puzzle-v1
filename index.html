@@ -24,6 +24,22 @@
                     </label>
                 </div>
             </div>
+
+            <!-- 代码信息覆盖层 -->
+            <div class="code-overlay" id="codeOverlay">
+                <!-- 动态生成的代码信息卡片将添加到这里 -->
+            </div>
+
+            <!-- 词条库 -->
+            <div class="token-library" id="tokenLibrary">
+                <div class="token-library-header">
+                    <span class="token-library-title">词条库</span>
+                    <span class="token-count" id="tokenCount">0</span>
+                </div>
+                <div class="token-list" id="tokenList">
+                    <!-- 词条将动态添加到这里 -->
+                </div>
+            </div>
         </div>
 
         <!-- 右侧AI对话区 30% -->
@@ -44,6 +60,50 @@
             <div class="chat-input-container">
                 <textarea id="chatInput" placeholder="向Alex发送消息..."></textarea>
                 <button id="sendBtn">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 代码查看窗口（弹出式） -->
+    <div class="code-viewer-overlay" id="codeViewerOverlay" style="display: none;">
+        <div class="code-viewer">
+            <div class="viewer-header">
+                <h3 id="viewerTitle">查看代码</h3>
+                <button class="close-btn" onclick="closeCodeViewer()">✕</button>
+            </div>
+
+            <div class="viewer-content" id="viewerContent">
+                <!-- 函数列表将动态添加到这里 -->
+            </div>
+
+            <div class="viewer-footer">
+                <button class="action-btn close-btn-footer" onclick="closeCodeViewer()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 函数编辑窗口（弹出式） -->
+    <div class="function-editor-overlay" id="functionEditorOverlay" style="display: none;">
+        <div class="function-editor">
+            <div class="editor-header">
+                <h3 id="editorTitle">编辑函数</h3>
+                <button class="close-btn" onclick="closeFunctionEditor()">✕</button>
+            </div>
+
+            <div class="editor-content">
+                <div class="editor-info">
+                    <span class="info-label">权限:</span>
+                    <span id="editorPermission" class="info-value"></span>
+                </div>
+
+                <div class="editor-workspace" id="editorWorkspace">
+                    <!-- 编辑区域，词条和文字将动态添加到这里 -->
+                </div>
+
+                <div class="editor-actions">
+                    <button class="action-btn cancel-btn" onclick="closeFunctionEditor()">取消</button>
+                    <button class="action-btn generate-btn" id="generateBtn" onclick="generateAndSendToAlex()">生成并发送给Alex</button>
+                </div>
             </div>
         </div>
     </div>

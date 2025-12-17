@@ -14,6 +14,7 @@ class GameObject {
         this.width = width;
         this.height = height;
         this.name = name;
+        this.className = this.constructor.name; // 自动获取类名
         this.rotation = 0;
         this.dragging = false;
         this.offsetX = 0;
@@ -24,12 +25,16 @@ class GameObject {
 
         // 存储函数代码（字符串形式，用于动态执行）
         this.functionCode = {};
+
+        // 存储函数的自然语言描述
+        this.naturalDescription = {};
     }
 
     // 注册一个可执行函数
-    registerFunction(funcName, code, permission) {
+    registerFunction(funcName, code, permission, naturalDesc = '') {
         this.functionCode[funcName] = code;
         this.permissions[funcName] = permission;
+        this.naturalDescription[funcName] = naturalDesc;
     }
 
     // 动态执行函数
@@ -92,6 +97,7 @@ class GameObject {
     getFunctionInfo() {
         let info = {
             objectName: this.name,
+            className: this.className, // 添加类名
             functions: []
         };
 
@@ -117,6 +123,11 @@ class GameObject {
                 funcInfo.body = this.functionCode[funcName];
             }
 
+            // 添加自然语言描述（如果存在）
+            if (this.naturalDescription[funcName]) {
+                funcInfo.naturalDescription = this.naturalDescription[funcName];
+            }
+
             info.functions.push(funcInfo);
         }
 
@@ -140,7 +151,7 @@ class PasswordDoor extends GameObject {
             } else {
                 addSystemMessage('密码错误！');
             }
-        `, PERMISSION.NO_READ);
+        `, PERMISSION.NO_READ, '<func>点击时</func>：<func>检查</func><func>密码</func>');
 
         // 注册onCollide函数 - 权限1（不可读）
         this.registerFunction('onCollide', `
@@ -149,7 +160,7 @@ class PasswordDoor extends GameObject {
                 alert('门被破坏了！游戏胜利！');
                 gameState.won = true;
             }
-        `, PERMISSION.NO_READ);
+        `, PERMISSION.NO_READ, '<func>碰撞时</func>：<func>减少</func><class>HP</class>');
     }
 
     render() {
@@ -183,7 +194,7 @@ class PiggyBank extends GameObject {
             let coin = new Coin(coinX, coinY);
             gameState.objects.push(coin);
             addSystemMessage('存钱罐掉出了一枚硬币！');
-        `, PERMISSION.EDIT);
+        `, PERMISSION.EDIT, '<func>点击时</func>：<func>生成</func>一个<class>金币</class>');
     }
 
     render() {
@@ -250,7 +261,7 @@ class Letter extends GameObject {
                     }
                 }
             }
-        `, PERMISSION.NO_READ);
+        `, PERMISSION.NO_READ, '<func>碰撞时</func>：<func>显示</func><func>隐藏文字</func>');
     }
 
     render() {
@@ -308,12 +319,12 @@ class Match extends GameObject {
                 this.x = arg0 + this.offsetX;
                 this.y = arg1 + this.offsetY;
             }
-        `, PERMISSION.READ_BODY);
+        `, PERMISSION.READ_BODY, '<func>拖动时</func>：<func>移动</func>位置');
 
         // 注册onClick函数 - 权限4（可编辑）
         this.registerFunction('onClick', `
             // 目前未使用
-        `, PERMISSION.EDIT);
+        `, PERMISSION.EDIT, '<func>点击时</func>：未使用');
 
         // 注册startDrag函数 - 权限3
         this.registerFunction('startDrag', `
@@ -322,12 +333,12 @@ class Match extends GameObject {
                 this.offsetX = this.x - arg0;
                 this.offsetY = this.y - arg1;
             }
-        `, PERMISSION.READ_BODY);
+        `, PERMISSION.READ_BODY, '<func>开始拖动</func>：设置<func>拖动状态</func>');
 
         // 注册stopDrag函数 - 权限3
         this.registerFunction('stopDrag', `
             this.dragging = false;
-        `, PERMISSION.READ_BODY);
+        `, PERMISSION.READ_BODY, '<func>停止拖动</func>：清除<func>拖动状态</func>');
     }
 
     render() {
@@ -351,7 +362,7 @@ class Gyro extends GameObject {
         this.registerFunction('onClick', `
             this.rotation += Math.PI / 2; // 旋转90度
             addSystemMessage('陀螺旋转了90度');
-        `, PERMISSION.EDIT);
+        `, PERMISSION.EDIT, '<func>点击时</func>：<func>旋转</func>90度');
     }
 
     render() {
