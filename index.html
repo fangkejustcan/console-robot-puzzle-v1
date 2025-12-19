@@ -30,14 +30,14 @@
                 <!-- 动态生成的代码信息卡片将添加到这里 -->
             </div>
 
-            <!-- 词条库 -->
+            <!-- 物品栏 -->
             <div class="token-library" id="tokenLibrary">
                 <div class="token-library-header">
-                    <span class="token-library-title">词条库</span>
+                    <span class="token-library-title">物品栏</span>
                     <span class="token-count" id="tokenCount">0</span>
                 </div>
                 <div class="token-list" id="tokenList">
-                    <!-- 词条将动态添加到这里 -->
+                    <!-- 物品将动态添加到这里 -->
                 </div>
             </div>
         </div>
@@ -103,6 +103,25 @@
                 <div class="editor-actions">
                     <button class="action-btn cancel-btn" onclick="closeFunctionEditor()">取消</button>
                     <button class="action-btn generate-btn" id="generateBtn" onclick="generateAndSendToAlex()">生成并发送给Alex</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 密钥破解窗口（弹出式） -->
+    <div class="unlock-dialog-overlay" id="unlockDialogOverlay" style="display: none;">
+        <div class="unlock-dialog">
+            <div class="unlock-header">
+                <h3 id="unlockTitle">破解函数</h3>
+                <button class="close-btn" onclick="closeUnlockDialog()">✕</button>
+            </div>
+
+            <div class="unlock-content">
+                <p class="unlock-message">此函数已被加密，需要使用 <span class="key-name">🔑 黄色密钥</span> 破解。</p>
+                <p class="unlock-hint">请从下方物品栏中选择密钥使用。</p>
+
+                <div class="unlock-actions">
+                    <button class="action-btn cancel-btn" onclick="closeUnlockDialog()">取消</button>
                 </div>
             </div>
         </div>

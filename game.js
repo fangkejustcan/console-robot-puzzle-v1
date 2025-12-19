@@ -6,7 +6,7 @@ let gameState = {
     discoveredCode: {}, // 存储已发现的代码信息
     analyzingObject: null, // 正在分析的物品
     analyzeStartTime: 0, // 分析开始时间
-    tokenLibrary: [], // 词条库：存储玩家已拾取的词条 {type: 'func'/'class', value: '词条内容'}
+    inventory: [], // 物品栏：存储玩家已拾取的物品 {type: 'token'/'key', category: 'func'/'class', value: '内容'}
     lastClickTime: 0, // 上次点击时间
     lastClickedObject: null, // 上次点击的物体
     codeCards: {} // 存储已创建的代码卡片DOM元素 {objectName: cardElement}
@@ -133,6 +133,9 @@ function draw() {
     // 检查碰撞
     checkCollisions();
 
+    // 清理超出屏幕的物体
+    cleanupOffscreenObjects();
+
     // 更新鼠标指针样式
     updateCursorStyle();
 }
@@ -149,6 +152,41 @@ function checkCollisions() {
                 obj2.executeFunction('onCollide', obj1);
             }
         }
+    }
+}
+
+// 清理超出屏幕的物体
+function cleanupOffscreenObjects() {
+    const margin = 100; // 超出屏幕的容差值
+    const toRemove = [];
+
+    for (let i = 0; i < gameState.objects.length; i++) {
+        let obj = gameState.objects[i];
+
+        // 检查物体是否完全超出屏幕（上下左右任意方向超出margin距离）
+        if (obj.x < -margin ||
+            obj.x > width + margin ||
+            obj.y < -margin ||
+            obj.y > height + margin) {
+
+            // 标记要删除的物体索引
+            toRemove.push(i);
+
+            // 清理相关的代码卡片
+            if (gameState.codeCards[obj.name]) {
+                removeCodeCard(obj.name);
+            }
+
+            // 清理发现的代码信息
+            if (gameState.discoveredCode[obj.name]) {
+                delete gameState.discoveredCode[obj.name];
+            }
+        }
+    }
+
+    // 从后往前删除，避免索引错乱
+    for (let i = toRemove.length - 1; i >= 0; i--) {
+        gameState.objects.splice(toRemove[i], 1);
     }
 }
 
@@ -207,7 +245,8 @@ function updateCodeOverlay() {
 
 // 创建代码卡片（只在分析完成时调用一次）
 function createCodeCardForObject(obj) {
-    const codeInfo = gameState.discoveredCode[obj.name];
+    // 实时获取最新的函数信息（权限可能已改变）
+    const codeInfo = obj.getFunctionInfo();
     if (!codeInfo || !codeInfo.functions) return;
 
     // 如果已经存在，先移除
@@ -222,31 +261,58 @@ function createCodeCardForObject(obj) {
     card.className = 'code-card';
     card.dataset.objectName = obj.name;
 
-    // 只显示前3个函数（权限>=3的）
-    const visibleFunctions = codeInfo.functions
-        .filter(f => f.permission >= 3 && f.naturalDescription)
-        .slice(0, 3);
+    // 添加类名标题（使用类名词条样式，可点击收集）
+    const classHeader = document.createElement('div');
+    classHeader.className = 'code-card-header';
+    const classNameToken = document.createElement('span');
+    classNameToken.className = 'scene-token token-class';
+    classNameToken.textContent = codeInfo.classNameCN;
+    classNameToken.dataset.tokenType = 'class';
+    classNameToken.dataset.tokenValue = codeInfo.classNameCN;
+    classHeader.appendChild(classNameToken);
+
+    // 添加最小化/展开按钮
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'card-toggle-btn';
+    toggleBtn.textContent = '−';
+    toggleBtn.title = '最小化';
+    toggleBtn.onclick = (e) => {
+        e.stopPropagation();
+        toggleCardMinimize(card, toggleBtn);
+    };
+    classHeader.appendChild(toggleBtn);
+
+    card.appendChild(classHeader);
+
+    // 创建内容容器（用于最小化/展开）
+    const contentContainer = document.createElement('div');
+    contentContainer.className = 'code-card-content';
+
+    // 显示前3个函数（所有权限）
+    const visibleFunctions = codeInfo.functions.slice(0, 3);
 
     for (let funcInfo of visibleFunctions) {
-        const funcDiv = createFunctionElement(funcInfo);
-        card.appendChild(funcDiv);
+        const funcDiv = createFunctionElement(funcInfo, obj.name);
+        contentContainer.appendChild(funcDiv);
     }
 
     // 如果有更多函数，显示省略号
-    const totalVisibleFunctions = codeInfo.functions.filter(f => f.permission >= 3).length;
-    if (totalVisibleFunctions > 3) {
+    if (codeInfo.functions.length > 3) {
         const moreDiv = document.createElement('div');
         moreDiv.className = 'code-card-function';
         moreDiv.innerHTML = '<span class="code-card-text">...</span>';
-        card.appendChild(moreDiv);
+        contentContainer.appendChild(moreDiv);
     }
+
+    card.appendChild(contentContainer);
 
     // 直接在卡片上绑定点击事件
     card.addEventListener('click', (e) => {
         console.log('卡片点击事件触发:', e.target);
 
-        // 检查点击的是否是词条元素
-        if (e.target.classList.contains('scene-token')) {
+        // 检查点击的是否是词条元素（但不是加密的???）
+        if (e.target.classList.contains('scene-token') &&
+            !e.target.classList.contains('encrypted-func')) {
             const type = e.target.dataset.tokenType;
             const value = e.target.dataset.tokenValue;
 
@@ -267,6 +333,28 @@ function createCodeCardForObject(obj) {
     console.log('创建代码卡片:', obj.name);
 }
 
+// 切换代码卡片的最小化/展开状态
+function toggleCardMinimize(card, toggleBtn) {
+    const header = card.querySelector('.code-card-header');
+    const content = card.querySelector('.code-card-content');
+    const classNameToken = card.querySelector('.scene-token');
+    const isMinimized = card.classList.toggle('minimized');
+
+    if (isMinimized) {
+        // 最小化：隐藏所有内容，只显示展开按钮
+        content.style.display = 'none';
+        classNameToken.style.display = 'none';
+        toggleBtn.textContent = '+';
+        toggleBtn.title = '展开';
+    } else {
+        // 展开：显示所有内容
+        content.style.display = 'block';
+        classNameToken.style.display = 'inline-flex';
+        toggleBtn.textContent = '−';
+        toggleBtn.title = '最小化';
+    }
+}
+
 // 更新代码卡片位置
 function updateCodeCardPosition(obj, card) {
     if (!card) {
@@ -275,9 +363,23 @@ function updateCodeCardPosition(obj, card) {
 
     if (!card) return;
 
-    // 计算卡片位置（物体右侧）
-    const cardX = obj.x + obj.width / 2 + 20;
-    const cardY = obj.y - obj.height / 2;
+    // 获取画布宽度
+    const canvasWidth = width;
+
+    // 判断物体是否靠右（超过画布宽度的60%）
+    const isOnRightSide = obj.x > canvasWidth * 0.6;
+
+    let cardX, cardY;
+
+    if (isOnRightSide) {
+        // 物体靠右，卡片显示在左侧
+        cardX = obj.x - obj.width / 2 - card.offsetWidth - 20;
+    } else {
+        // 物体靠左，卡片显示在右侧
+        cardX = obj.x + obj.width / 2 + 20;
+    }
+
+    cardY = obj.y - obj.height / 2;
 
     card.style.left = cardX + 'px';
     card.style.top = cardY + 'px';
@@ -291,6 +393,19 @@ function removeCodeCard(objectName) {
     }
 }
 
+// 刷新代码卡片（权限改变后调用）
+function refreshCodeCard(objectName) {
+    // 找到对应的物体
+    const obj = gameState.objects.find(o => o.name === objectName);
+    if (!obj) return;
+
+    // 删除旧卡片
+    removeCodeCard(objectName);
+
+    // 重新创建卡片
+    createCodeCardForObject(obj);
+}
+
 // 清空所有代码卡片
 function clearAllCodeCards() {
     for (let objectName in gameState.codeCards) {
@@ -300,32 +415,62 @@ function clearAllCodeCards() {
 }
 
 // 创建单个函数的DOM元素
-function createFunctionElement(funcInfo) {
+function createFunctionElement(funcInfo, objectName) {
     const funcDiv = document.createElement('div');
     funcDiv.className = 'code-card-function';
 
-    const parts = parseNaturalDescription(funcInfo.naturalDescription);
+    // 根据权限决定显示内容
+    if (funcInfo.permission === 1) {
+        // 权限1：完全不可读，显示 ???
+        const tokenSpan = document.createElement('span');
+        tokenSpan.className = 'scene-token token-func encrypted-func';
+        tokenSpan.textContent = '???';
+        funcDiv.appendChild(tokenSpan);
+    } else if (funcInfo.permission === 2) {
+        // 权限2：可读函数名，内容不可读
+        // 显示函数名
+        const funcNameSpan = document.createElement('span');
+        funcNameSpan.className = 'scene-token token-func';
+        funcNameSpan.textContent = funcInfo.name;
+        funcDiv.appendChild(funcNameSpan);
 
-    for (let part of parts) {
-        if (part.type === 'text') {
-            // 普通文本
-            const textSpan = document.createElement('span');
-            textSpan.className = 'code-card-text';
-            textSpan.textContent = part.value;
-            funcDiv.appendChild(textSpan);
-        } else {
-            // 词条
-            const tokenSpan = document.createElement('span');
-            tokenSpan.className = `scene-token token-${part.type}`;
-            tokenSpan.textContent = part.value;
-            tokenSpan.dataset.tokenType = part.type;
-            tokenSpan.dataset.tokenValue = part.value;
+        // 显示冒号
+        const colonSpan = document.createElement('span');
+        colonSpan.className = 'code-card-text';
+        colonSpan.textContent = ':';
+        funcDiv.appendChild(colonSpan);
 
-            // 不再检查是否已收集，始终显示为可点击状态
+        // 显示 ???
+        const encryptedSpan = document.createElement('span');
+        encryptedSpan.className = 'scene-token token-func encrypted-func';
+        encryptedSpan.textContent = '???';
+        funcDiv.appendChild(encryptedSpan);
+    } else if (funcInfo.permission >= 3) {
+        // 权限3和4：显示完整的自然语言描述
+        const parts = parseNaturalDescription(funcInfo.naturalDescription);
 
-            funcDiv.appendChild(tokenSpan);
+        for (let part of parts) {
+            if (part.type === 'text') {
+                // 普通文本
+                const textSpan = document.createElement('span');
+                textSpan.className = 'code-card-text';
+                textSpan.textContent = part.value;
+                funcDiv.appendChild(textSpan);
+            } else {
+                // 词条
+                const tokenSpan = document.createElement('span');
+                tokenSpan.className = `scene-token token-${part.type}`;
+                tokenSpan.textContent = part.value;
+                tokenSpan.dataset.tokenType = part.type;
+                tokenSpan.dataset.tokenValue = part.value;
+                funcDiv.appendChild(tokenSpan);
+            }
         }
     }
+
+    // 添加按钮区域
+    const buttonArea = document.createElement('span');
+    buttonArea.className = 'function-buttons';
 
     // 如果是权限4，添加编辑按钮
     if (funcInfo.permission >= 4) {
@@ -334,13 +479,28 @@ function createFunctionElement(funcInfo) {
         editBtn.textContent = '编辑';
         editBtn.onclick = (e) => {
             e.stopPropagation();
-            // 需要获取物体名称和函数名，通过DOM向上查找
             const card = e.target.closest('.code-card');
-            const objectName = card.dataset.objectName;
-            openFunctionEditor(objectName, funcInfo.name);
+            const objName = card.dataset.objectName;
+            openFunctionEditor(objName, funcInfo.name);
         };
-        funcDiv.appendChild(editBtn);
+        buttonArea.appendChild(editBtn);
     }
+
+    // 如果是权限1、2、3，添加密钥破解按钮
+    if (funcInfo.permission < 4) {
+        const unlockBtn = document.createElement('button');
+        unlockBtn.className = 'inline-unlock-btn';
+        unlockBtn.textContent = '🔓破解';
+        unlockBtn.onclick = (e) => {
+            e.stopPropagation();
+            const card = e.target.closest('.code-card');
+            const objName = card.dataset.objectName;
+            openUnlockDialog(objName, funcInfo.name);
+        };
+        buttonArea.appendChild(unlockBtn);
+    }
+
+    funcDiv.appendChild(buttonArea);
 
     return funcDiv;
 }
@@ -436,6 +596,9 @@ function mousePressed() {
             if (gameState.mode === 'normal') {
                 // 普通模式：执行onClick
                 obj.executeFunction('onClick');
+
+                // 尝试开始拖拽（如果物体设置了draggable=true）
+                obj.startDragging(mouseX, mouseY);
             } else if (gameState.mode === 'ripper') {
                 // 代码撕裂器模式
                 if (isDoubleClick && gameState.lastClickedObject === obj.name && gameState.discoveredCode[obj.name]) {
@@ -446,11 +609,6 @@ function mousePressed() {
                     ripObject(obj);
                     gameState.lastClickedObject = obj.name;
                 }
-            }
-
-            // 检查是否支持拖拽
-            if (obj.functionCode['startDrag']) {
-                obj.executeFunction('startDrag', mouseX, mouseY);
             }
 
             gameState.lastClickTime = currentTime;
@@ -464,18 +622,16 @@ function mousePressed() {
 // 鼠标拖动事件
 function mouseDragged() {
     for (let obj of gameState.objects) {
-        if (obj.functionCode['onDrag'] && obj.dragging) {
-            obj.executeFunction('onDrag', mouseX, mouseY);
-        }
+        // 调用内部拖拽方法
+        obj.updateDragging(mouseX, mouseY);
     }
 }
 
 // 鼠标释放事件
 function mouseReleased() {
     for (let obj of gameState.objects) {
-        if (obj.functionCode['stopDrag']) {
-            obj.executeFunction('stopDrag');
-        }
+        // 调用内部停止拖拽方法
+        obj.stopDragging();
     }
 }
 
@@ -486,7 +642,11 @@ function showFunctionSelectionMenu(obj) {
 
 // 打开代码查看窗口
 function openCodeViewer(objectName) {
-    const codeInfo = gameState.discoveredCode[objectName];
+    // 找到对应的物体，实时获取最新权限信息
+    const obj = gameState.objects.find(o => o.name === objectName);
+    if (!obj) return;
+
+    const codeInfo = obj.getFunctionInfo();
     if (!codeInfo || !codeInfo.functions) return;
 
     // 更新标题
@@ -635,6 +795,139 @@ function collectToken(type, value, element) {
     }
 }
 
+// 创建飞行词条动画
+function createFlyingToken(fromElement, item) {
+    // 获取起点位置
+    const fromRect = fromElement.getBoundingClientRect();
+
+    // 获取终点位置（物品栏）
+    const inventory = document.getElementById('tokenLibrary');
+    const inventoryRect = inventory.getBoundingClientRect();
+
+    // 创建飞行副本
+    const flyingToken = fromElement.cloneNode(true);
+    flyingToken.style.position = 'fixed';
+    flyingToken.style.left = fromRect.left + 'px';
+    flyingToken.style.top = fromRect.top + 'px';
+    flyingToken.style.zIndex = '10000';
+    flyingToken.style.pointerEvents = 'none';
+    flyingToken.style.transition = 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+
+    document.body.appendChild(flyingToken);
+
+    // 返回一个Promise，在动画结束后resolve
+    return new Promise(resolve => {
+        // 稍微延迟，确保DOM已渲染
+        setTimeout(() => {
+            // 开始飞行动画
+            flyingToken.style.left = inventoryRect.left + inventoryRect.width / 2 - fromRect.width / 2 + 'px';
+            flyingToken.style.top = inventoryRect.top + inventoryRect.height / 2 - fromRect.height / 2 + 'px';
+            flyingToken.style.transform = 'scale(0.5)';
+            flyingToken.style.opacity = '0.8';
+
+            // 动画结束后清理
+            setTimeout(() => {
+                flyingToken.remove();
+                resolve();
+            }, 800);
+        }, 50);
+    });
+}
+
+// 自动收集物体的所有可收集词条（带动画效果）
+function autoCollectTokensFromObject(obj) {
+    // 找到该物体的代码卡片
+    const card = gameState.codeCards[obj.name];
+    if (!card) {
+        console.log('未找到代码卡片:', obj.name);
+        return;
+    }
+
+    // 找到所有可收集的词条元素（不是加密的???）
+    const tokenElements = card.querySelectorAll('.scene-token:not(.encrypted-func)');
+
+    if (tokenElements.length === 0) {
+        console.log('没有可收集的词条');
+        return;
+    }
+
+    let collectedTokens = [];
+
+    // 收集所有词条信息
+    tokenElements.forEach(element => {
+        const type = element.dataset.tokenType;
+        const value = element.dataset.tokenValue;
+
+        if (type && value) {
+            // 检查是否已存在
+            const exists = gameState.inventory.some(i =>
+                i.type === 'token' && i.category === type && i.value === value
+            );
+
+            if (!exists) {
+                // 添加到inventory（不更新UI）
+                gameState.inventory.push({
+                    type: 'token',
+                    category: type,
+                    value: value
+                });
+
+                collectedTokens.push({ element, type, value });
+            }
+        }
+    });
+
+    // 如果有新收集的词条，依次播放飞行动画
+    if (collectedTokens.length > 0) {
+        let animationPromises = [];
+
+        collectedTokens.forEach((token, index) => {
+            setTimeout(() => {
+                // 添加发光效果
+                token.element.classList.add('auto-collecting');
+
+                // 延迟一点开始飞行，让发光效果先显示
+                setTimeout(() => {
+                    const promise = createFlyingToken(token.element, {
+                        type: 'token',
+                        category: token.type,
+                        value: token.value
+                    });
+
+                    // 飞行动画结束后，移除发光效果
+                    promise.then(() => {
+                        token.element.classList.remove('auto-collecting');
+                    });
+
+                    animationPromises.push(promise);
+                }, 300);
+            }, index * 200); // 每个词条延迟200ms
+        });
+
+        // 等待所有飞行动画完成后更新物品栏UI
+        setTimeout(() => {
+            updateInventoryUI();
+
+            // 给新添加的词条添加出现动画
+            setTimeout(() => {
+                const itemList = document.getElementById('tokenList');
+                const newItems = itemList.querySelectorAll('.token-item');
+                const startIndex = Math.max(0, newItems.length - collectedTokens.length);
+
+                for (let i = startIndex; i < newItems.length; i++) {
+                    newItems[i].style.animation = 'token-appear 0.5s ease-out';
+                }
+            }, 50);
+
+            addSystemMessage(`✨ 自动收集了 ${collectedTokens.length} 个新词条`);
+        }, collectedTokens.length * 200 + 1100);
+
+        console.log('自动收集词条:', collectedTokens.map(t => t.value).join(', '));
+    } else {
+        console.log('所有词条已收集');
+    }
+}
+
 // 关闭代码查看窗口
 function closeCodeViewer() {
     document.getElementById('codeViewerOverlay').style.display = 'none';
@@ -661,6 +954,14 @@ function ripObject(obj) {
 
     // 存储到已发现的代码中（立即存储，这样Alex可以看到）
     gameState.discoveredCode[obj.name] = codeInfo;
+
+    // 立即创建代码卡片
+    createCodeCardForObject(obj);
+
+    // 等待DOM渲染完成后再自动收集词条
+    setTimeout(() => {
+        autoCollectTokensFromObject(obj);
+    }, 100);
 
     // 通知Alex进行分析
     notifyAlexCodeDiscovered(codeInfo);
@@ -746,22 +1047,68 @@ function extractTokens(naturalDescription) {
         });
     }
 
+    // 提取<attr>标签中的内容
+    const attrRegex = /<attr>(.*?)<\/attr>/g;
+    while ((match = attrRegex.exec(naturalDescription)) !== null) {
+        tokens.push({
+            type: 'attr',
+            value: match[1]
+        });
+    }
+
     return tokens;
 }
 
-// 添加词条到词条库（去重）
-function addTokenToLibrary(token) {
-    // 检查是否已存在
-    const exists = gameState.tokenLibrary.some(t =>
-        t.type === token.type && t.value === token.value
-    );
+// 添加物品到物品栏
+function addItemToInventory(item) {
+    // item格式: {type: 'token'/'key', category: 'func'/'class' (仅token), value: '内容'}
 
-    if (!exists) {
-        gameState.tokenLibrary.push(token);
-        updateTokenLibraryUI();
+    if (item.type === 'token') {
+        // 词条需要去重
+        const exists = gameState.inventory.some(i =>
+            i.type === 'token' && i.category === item.category && i.value === item.value
+        );
+        if (!exists) {
+            gameState.inventory.push({
+                type: 'token',
+                category: item.category,
+                value: item.value
+            });
+            updateInventoryUI();
+            return true;
+        }
+        return false;
+    } else if (item.type === 'key') {
+        // 密钥可以堆叠，检查是否已有同名密钥
+        const existingKey = gameState.inventory.find(i =>
+            i.type === 'key' && i.value === item.value
+        );
+        if (existingKey) {
+            // 已有同名密钥，数量+1
+            existingKey.count = (existingKey.count || 1) + 1;
+        } else {
+            // 新密钥，添加到物品栏
+            gameState.inventory.push({
+                type: 'key',
+                value: item.value,
+                count: 1
+            });
+        }
+        updateInventoryUI();
         return true;
     }
+
     return false;
+}
+
+// 兼容旧版本的addTokenToLibrary
+function addTokenToLibrary(token) {
+    // 转换为新的物品格式
+    return addItemToInventory({
+        type: 'token',
+        category: token.type,  // 'func' or 'class'
+        value: token.value
+    });
 }
 
 // 从自然语言描述中提取并添加所有词条
@@ -778,38 +1125,79 @@ function extractAndAddTokens(naturalDescription) {
     return addedCount;
 }
 
-// 更新词条库UI
-function updateTokenLibraryUI() {
-    const tokenList = document.getElementById('tokenList');
-    const tokenCount = document.getElementById('tokenCount');
+// 更新物品栏UI
+function updateInventoryUI() {
+    const itemList = document.getElementById('tokenList');
+    const itemCount = document.getElementById('tokenCount');
 
     // 更新计数
-    tokenCount.textContent = gameState.tokenLibrary.length;
+    itemCount.textContent = gameState.inventory.length;
 
-    // 清空现有词条
-    tokenList.innerHTML = '';
+    // 清空现有物品
+    itemList.innerHTML = '';
 
-    // 渲染所有词条
-    for (let token of gameState.tokenLibrary) {
-        const tokenElement = document.createElement('div');
-        tokenElement.className = `token-item token-${token.type}`;
-        tokenElement.textContent = token.value;
-        tokenElement.draggable = true;
+    // 渲染所有物品
+    for (let item of gameState.inventory) {
+        const itemElement = document.createElement('div');
 
-        // 存储词条数据
-        tokenElement.dataset.tokenType = token.type;
-        tokenElement.dataset.tokenValue = token.value;
+        if (item.type === 'token') {
+            // 词条物品
+            itemElement.className = `token-item token-${item.category}`;
+            itemElement.textContent = item.value;
+            itemElement.draggable = true;
 
-        // 添加拖拽事件
-        tokenElement.addEventListener('dragstart', handleTokenDragStart);
+            // 存储词条数据
+            itemElement.dataset.tokenType = item.category;
+            itemElement.dataset.tokenValue = item.value;
 
-        // 添加点击事件 - 如果编辑器打开，点击可添加到编辑器
-        tokenElement.addEventListener('click', () => {
-            handleTokenLibraryClick(token.type, token.value);
-        });
+            // 添加拖拽事件
+            itemElement.addEventListener('dragstart', handleTokenDragStart);
 
-        tokenList.appendChild(tokenElement);
+            // 添加点击事件 - 如果编辑器打开，点击可添加到编辑器
+            itemElement.addEventListener('click', () => {
+                handleTokenLibraryClick(item.category, item.value);
+            });
+        } else if (item.type === 'key') {
+            // 密钥物品
+            itemElement.className = 'token-item token-key';
+
+            // 创建密钥内容容器
+            const keyContent = document.createElement('span');
+            keyContent.textContent = `🔑 ${item.value}`;
+            itemElement.appendChild(keyContent);
+
+            // 如果数量大于1，添加数量角标
+            if (item.count && item.count > 1) {
+                const countBadge = document.createElement('span');
+                countBadge.className = 'item-count-badge';
+                countBadge.textContent = item.count;
+                itemElement.appendChild(countBadge);
+            }
+
+            // 存储密钥数据
+            itemElement.dataset.itemType = 'key';
+            itemElement.dataset.itemValue = item.value;
+
+            // 密钥点击事件：如果破解窗口打开，则尝试破解；否则显示信息
+            itemElement.addEventListener('click', () => {
+                if (currentUnlockingFunction) {
+                    // 破解窗口打开，尝试使用此密钥破解
+                    attemptUnlockWithKey(item.value);
+                } else {
+                    // 正常情况，显示密钥信息
+                    const countText = item.count > 1 ? ` x${item.count}` : '';
+                    addSystemMessage(`密钥: ${item.value}${countText}`);
+                }
+            });
+        }
+
+        itemList.appendChild(itemElement);
     }
+}
+
+// 兼容旧版本的updateTokenLibraryUI
+function updateTokenLibraryUI() {
+    updateInventoryUI();
 }
 
 // 词条拖拽开始事件
@@ -889,11 +1277,14 @@ let currentEditingFunction = null; // 当前正在编辑的函数信息
 
 // 打开函数编辑器
 function openFunctionEditor(objectName, functionName) {
-    // 获取物体和函数信息
+    // 找到对应的物体，实时获取最新权限信息
     const obj = gameState.objects.find(o => o.name === objectName);
     if (!obj) return;
 
-    const funcInfo = gameState.discoveredCode[objectName]?.functions.find(
+    const codeInfo = obj.getFunctionInfo();
+    if (!codeInfo) return;
+
+    const funcInfo = codeInfo.functions.find(
         f => f.name === functionName || f.name === functionName.charAt(0) + '*'.repeat(functionName.length - 1)
     );
 
@@ -1029,7 +1420,7 @@ function updateWorkspaceFromDOM() {
 function parseNaturalDescription(desc) {
     const parts = [];
     let lastIndex = 0;
-    const regex = /<(func|class)>(.*?)<\/\1>/g;
+    const regex = /<(func|class|attr)>(.*?)<\/\1>/g;
     let match;
 
     while ((match = regex.exec(desc)) !== null) {
@@ -1043,7 +1434,7 @@ function parseNaturalDescription(desc) {
 
         // 添加词条
         parts.push({
-            type: match[1],  // 'func' or 'class'
+            type: match[1],  // 'func', 'class', or 'attr'
             value: match[2]
         });
 
@@ -1207,6 +1598,145 @@ function closeFunctionEditor() {
 
     // 恢复词条库的z-index
     document.getElementById('tokenLibrary').classList.remove('editor-active');
+}
+
+// ========== 密钥破解系统 ==========
+
+let currentUnlockingFunction = null; // 当前正在破解的函数信息
+
+// 打开密钥破解窗口
+function openUnlockDialog(objectName, functionName) {
+    // 找到对应的物体，实时获取最新权限信息
+    const obj = gameState.objects.find(o => o.name === objectName);
+    if (!obj) return;
+
+    const codeInfo = obj.getFunctionInfo();
+    if (!codeInfo) return;
+
+    const funcInfo = codeInfo.functions.find(
+        f => f.name === functionName
+    );
+
+    if (!funcInfo) return;
+
+    // 存储当前破解信息
+    currentUnlockingFunction = {
+        objectName: objectName,
+        functionName: functionName,
+        permission: funcInfo.permission
+    };
+
+    // 更新UI
+    document.getElementById('unlockTitle').textContent = `破解 ${objectName}.${functionName}`;
+
+    // 显示窗口
+    document.getElementById('unlockDialogOverlay').style.display = 'flex';
+
+    // 提升物品栏的z-index，使其在破解窗口上方
+    document.getElementById('tokenLibrary').classList.add('unlock-active');
+}
+
+// 关闭密钥破解窗口
+function closeUnlockDialog() {
+    document.getElementById('unlockDialogOverlay').style.display = 'none';
+    currentUnlockingFunction = null;
+
+    // 恢复物品栏的z-index
+    document.getElementById('tokenLibrary').classList.remove('unlock-active');
+}
+
+// 尝试使用密钥破解（从物品栏点击密钥时调用）
+function attemptUnlockWithKey(keyValue) {
+    if (!currentUnlockingFunction) return;
+
+    // 检查是否是黄色密钥
+    if (keyValue !== '黄色密钥') {
+        addSystemMessage('❌ 此函数需要黄色密钥破解');
+        return;
+    }
+
+    // 破解成功，升级权限
+    const obj = gameState.objects.find(o => o.name === currentUnlockingFunction.objectName);
+    if (!obj) return;
+
+    // 找到真实的函数名（因为权限1的函数名可能是加密的）
+    let realFunctionName = null;
+    const displayedName = currentUnlockingFunction.functionName;
+
+    // 遍历所有函数，找到匹配的真实函数名
+    for (let funcName in obj.permissions) {
+        // 如果权限是1，函数名会被加密为 首字母+星号
+        if (obj.permissions[funcName] === PERMISSION.NO_READ) {
+            const encryptedName = funcName.charAt(0) + '*'.repeat(funcName.length - 1);
+            if (encryptedName === displayedName) {
+                realFunctionName = funcName;
+                break;
+            }
+        } else if (funcName === displayedName) {
+            // 权限>=2，函数名没有加密
+            realFunctionName = funcName;
+            break;
+        }
+    }
+
+    if (!realFunctionName) {
+        addSystemMessage('❌ 找不到对应的函数');
+        console.error('找不到函数:', displayedName);
+        return;
+    }
+
+    // 升级权限为4
+    obj.permissions[realFunctionName] = PERMISSION.EDIT;
+
+    // 消耗一个黄色密钥
+    const keyItem = gameState.inventory.find(item =>
+        item.type === 'key' && item.value === '黄色密钥'
+    );
+    if (keyItem) {
+        if (keyItem.count > 1) {
+            // 数量大于1，减少数量
+            keyItem.count--;
+        } else {
+            // 数量为1，删除密钥
+            const keyIndex = gameState.inventory.indexOf(keyItem);
+            gameState.inventory.splice(keyIndex, 1);
+        }
+        updateInventoryUI();
+    }
+
+    // 刷新代码卡片（会实时获取最新权限信息）
+    refreshCodeCard(currentUnlockingFunction.objectName);
+
+    // 等待DOM渲染完成后，自动收集破解出来的新词条
+    setTimeout(() => {
+        // 如果卡片是最小化的，先展开它
+        const card = gameState.codeCards[currentUnlockingFunction.objectName];
+        if (card && card.classList.contains('minimized')) {
+            const toggleBtn = card.querySelector('.card-toggle-btn');
+            if (toggleBtn) {
+                toggleCardMinimize(card, toggleBtn);
+            }
+        }
+
+        // 自动收集新词条
+        autoCollectTokensFromObject(obj);
+    }, 150);
+
+    addSystemMessage(`✅ 破解成功！${realFunctionName} 权限已升级`);
+
+    // 通知Alex破解成功
+    const unlockMessage = `我用密钥破解了 ${currentUnlockingFunction.objectName} 的 ${realFunctionName} 函数，现在权限是4了，可以编辑了。`;
+    if (typeof sendMessage === 'function') {
+        sendMessage(unlockMessage, false); // false表示不在UI中重复显示
+    }
+
+    // 关闭窗口
+    closeUnlockDialog();
+}
+
+// 尝试破解（旧版本，已废弃）
+function attemptUnlock() {
+    // 这个函数已经不再使用，保留以防万一
 }
 
 // 生成并发送给Alex

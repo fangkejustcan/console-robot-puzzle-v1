@@ -15,10 +15,14 @@ class GameObject {
         this.height = height;
         this.name = name;
         this.className = this.constructor.name; // 自动获取类名
+        this.classNameCN = ''; // 中文类名，由子类设置
         this.rotation = 0;
-        this.dragging = false;
-        this.offsetX = 0;
-        this.offsetY = 0;
+
+        // 拖拽相关属性（内部管理，不暴露给玩家）
+        this.draggable = false; // 是否可拖拽
+        this.dragging = false;  // 是否正在拖拽
+        this.dragOffsetX = 0;   // 拖拽偏移量
+        this.dragOffsetY = 0;
 
         // 存储函数权限
         this.permissions = {};
@@ -28,6 +32,29 @@ class GameObject {
 
         // 存储函数的自然语言描述
         this.naturalDescription = {};
+    }
+
+    // 开始拖拽（内部方法）
+    startDragging(mouseX, mouseY) {
+        if (!this.draggable || !this.containsPoint(mouseX, mouseY)) return false;
+
+        this.dragging = true;
+        this.dragOffsetX = this.x - mouseX;
+        this.dragOffsetY = this.y - mouseY;
+        return true;
+    }
+
+    // 拖拽中（内部方法）
+    updateDragging(mouseX, mouseY) {
+        if (!this.dragging) return;
+
+        this.x = mouseX + this.dragOffsetX;
+        this.y = mouseY + this.dragOffsetY;
+    }
+
+    // 停止拖拽（内部方法）
+    stopDragging() {
+        this.dragging = false;
     }
 
     // 注册一个可执行函数
@@ -97,7 +124,8 @@ class GameObject {
     getFunctionInfo() {
         let info = {
             objectName: this.name,
-            className: this.className, // 添加类名
+            className: this.className, // 英文类名
+            classNameCN: this.classNameCN, // 中文类名
             functions: []
         };
 
@@ -139,19 +167,26 @@ class GameObject {
 class PasswordDoor extends GameObject {
     constructor(x, y) {
         super(x, y, 100, 150, 'PasswordDoor');
-        this.hp = 10000;
+        this.classNameCN = '密码门';
+        this.hp = 1000000;
         this.password = '1211';
 
         // 注册onClick函数 - 权限1（不可读）
         this.registerFunction('onClick', `
             let input = prompt('请输入4位数密码:');
             if (input === this.password) {
-                alert('密码正确！游戏胜利！');
-                gameState.won = true;
+                // 密码正确，给玩家5个黄色密钥
+                for (let i = 1; i <= 5; i++) {
+                    addItemToInventory({
+                        type: 'key',
+                        value: '黄色密钥'
+                    });
+                }
+                addSystemMessage('密码正确！获得5个黄色密钥！');
             } else {
                 addSystemMessage('密码错误！');
             }
-        `, PERMISSION.NO_READ, '<func>点击时</func>：<func>检查</func><func>密码</func>');
+        `, PERMISSION.NO_READ, '<func>点击时</func>：<func>检查</func><attr>密码</attr>');
 
         // 注册onCollide函数 - 权限1（不可读）
         this.registerFunction('onCollide', `
@@ -160,7 +195,7 @@ class PasswordDoor extends GameObject {
                 alert('门被破坏了！游戏胜利！');
                 gameState.won = true;
             }
-        `, PERMISSION.NO_READ, '<func>碰撞时</func>：<func>减少</func><class>HP</class>');
+        `, PERMISSION.NO_READ, '<func>碰撞时</func>：<attr>HP</attr><func>减少</func>1');
     }
 
     render() {
@@ -185,6 +220,7 @@ class PasswordDoor extends GameObject {
 class PiggyBank extends GameObject {
     constructor(x, y) {
         super(x, y, 60, 50, 'PiggyBank');
+        this.classNameCN = '存钱罐';
 
         // 注册onClick函数 - 权限4（可编辑）
         this.registerFunction('onClick', `
@@ -221,6 +257,7 @@ class PiggyBank extends GameObject {
 class Coin extends GameObject {
     constructor(x, y) {
         super(x, y, 20, 20, 'Coin');
+        this.classNameCN = '金币';
         this.velocity = 2;
     }
 
@@ -243,6 +280,7 @@ class Coin extends GameObject {
 class Letter extends GameObject {
     constructor(x, y) {
         super(x, y, 150, 200, 'Letter');
+        this.classNameCN = '信纸';
         this.text = '火焰让人温暖，也让人看的更清楚。密';
         this.hiddenText = ['码', '是', '1', '2', '1', '1'];
         this.revealedCount = 0;
@@ -261,7 +299,7 @@ class Letter extends GameObject {
                     }
                 }
             }
-        `, PERMISSION.NO_READ, '<func>碰撞时</func>：<func>显示</func><func>隐藏文字</func>');
+        `, PERMISSION.NO_READ, '<func>碰撞时</func>：<func>显示</func><attr>隐藏文字</attr>');
     }
 
     render() {
@@ -311,34 +349,13 @@ class Letter extends GameObject {
 class Match extends GameObject {
     constructor(x, y, id) {
         super(x, y, 10, 60, `Match_${id}`);
+        this.classNameCN = '火柴';
         this.id = id;
-
-        // 注册onDrag函数 - 权限3（可读函数体）
-        this.registerFunction('onDrag', `
-            if (this.dragging) {
-                this.x = arg0 + this.offsetX;
-                this.y = arg1 + this.offsetY;
-            }
-        `, PERMISSION.READ_BODY, '<func>拖动时</func>：<func>移动</func>位置');
 
         // 注册onClick函数 - 权限4（可编辑）
         this.registerFunction('onClick', `
-            // 目前未使用
-        `, PERMISSION.EDIT, '<func>点击时</func>：未使用');
-
-        // 注册startDrag函数 - 权限3
-        this.registerFunction('startDrag', `
-            if (this.containsPoint(arg0, arg1)) {
-                this.dragging = true;
-                this.offsetX = this.x - arg0;
-                this.offsetY = this.y - arg1;
-            }
-        `, PERMISSION.READ_BODY, '<func>开始拖动</func>：设置<func>拖动状态</func>');
-
-        // 注册stopDrag函数 - 权限3
-        this.registerFunction('stopDrag', `
-            this.dragging = false;
-        `, PERMISSION.READ_BODY, '<func>停止拖动</func>：清除<func>拖动状态</func>');
+            this.draggable = true;
+        `, PERMISSION.EDIT, '<func>点击时</func>：设置<attr>可拖拽</attr>');
     }
 
     render() {
@@ -357,12 +374,13 @@ class Match extends GameObject {
 class Gyro extends GameObject {
     constructor(x, y) {
         super(x, y, 50, 50, 'Gyro');
+        this.classNameCN = '陀螺';
 
         // 注册onClick函数 - 权限4（可编辑）
         this.registerFunction('onClick', `
             this.rotation += Math.PI / 2; // 旋转90度
             addSystemMessage('陀螺旋转了90度');
-        `, PERMISSION.EDIT, '<func>点击时</func>：<func>旋转</func>90度');
+        `, PERMISSION.EDIT, '<func>点击时</func>：<attr>旋转</attr><func>增加</func>90度');
     }
 
     render() {

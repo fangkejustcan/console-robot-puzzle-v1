@@ -381,6 +381,57 @@ canvas {
     box-shadow: 0 4px 12px rgba(0, 255, 0, 0.3);
 }
 
+.code-card-header {
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid rgba(0, 255, 0, 0.4);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* 代码卡片最小化按钮 */
+.card-toggle-btn {
+    background: rgba(0, 255, 0, 0.1);
+    border: 1px solid rgba(0, 255, 0, 0.5);
+    color: #00ff00;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.card-toggle-btn:hover {
+    background: rgba(0, 255, 0, 0.3);
+    border-color: #00ff00;
+    box-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+}
+
+/* 最小化状态的卡片样式 */
+.code-card.minimized {
+    min-width: auto;
+    padding: 4px;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.code-card.minimized .code-card-header {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
+}
+
+.code-card-content {
+    display: block;
+}
+
 .code-card-function {
     margin-bottom: 6px;
     line-height: 1.6;
@@ -426,6 +477,27 @@ canvas {
     box-shadow: 0 0 5px rgba(78, 204, 163, 0.3);
 }
 
+.scene-token.token-attr {
+    background: rgba(138, 180, 248, 0.3);
+    border-color: #8ab4f8;
+    color: #8ab4f8;
+    box-shadow: 0 0 5px rgba(138, 180, 248, 0.3);
+}
+
+/* 加密函数词条（???） */
+.scene-token.encrypted-func {
+    background: rgba(200, 0, 0, 0.3);
+    border-color: #ff0000;
+    color: #ff0000;
+    box-shadow: 0 0 5px rgba(200, 0, 0, 0.3);
+    cursor: not-allowed;
+}
+
+.scene-token.encrypted-func:hover {
+    transform: none;
+    filter: none;
+}
+
 .scene-token:hover {
     transform: scale(1.1);
     filter: brightness(1.3);
@@ -462,6 +534,11 @@ canvas {
 
 /* 编辑器打开时，提升词条库的z-index */
 .token-library.editor-active {
+    z-index: 1001;
+}
+
+/* 破解窗口打开时，提升物品栏的z-index */
+.token-library.unlock-active {
     z-index: 1001;
 }
 
@@ -549,6 +626,51 @@ canvas {
     background: rgba(78, 204, 163, 0.4);
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(78, 204, 163, 0.3);
+}
+
+/* attr类型词条 - 淡蓝色 */
+.token-item.token-attr {
+    background: rgba(138, 180, 248, 0.2);
+    border: 1px solid #8ab4f8;
+    color: #8ab4f8;
+}
+
+.token-item.token-attr:hover {
+    background: rgba(138, 180, 248, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(138, 180, 248, 0.3);
+}
+
+/* 密钥物品 - 金色 */
+.token-item.token-key {
+    background: rgba(255, 215, 0, 0.2);
+    border: 1px solid #ffd700;
+    color: #ffd700;
+    cursor: default;
+    position: relative; /* 为角标定位 */
+}
+
+.token-item.token-key:hover {
+    background: rgba(255, 215, 0, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(255, 215, 0, 0.3);
+}
+
+/* 物品数量角标 */
+.item-count-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #e94560;
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    pointer-events: none; /* 不干扰点击事件 */
 }
 
 /* 词条库滚动条 */
@@ -697,6 +819,12 @@ canvas {
     color: #4ecca3;
 }
 
+.collectable-token.token-attr {
+    background: rgba(138, 180, 248, 0.2);
+    border: 1px solid #8ab4f8;
+    color: #8ab4f8;
+}
+
 .collectable-token:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 255, 0, 0.4);
@@ -780,24 +908,179 @@ canvas {
     50% { transform: scale(1.2); }
 }
 
+/* 自动收集动画 - 更炫酷 */
+@keyframes auto-collect {
+    0% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+    30% {
+        transform: scale(1.3);
+        filter: brightness(2) drop-shadow(0 0 10px currentColor);
+    }
+    60% {
+        transform: scale(0.8) translateY(-20px);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(1);
+        filter: brightness(1);
+        opacity: 1;
+    }
+}
+
+.auto-collecting {
+    animation: auto-collect 0.8s ease-out;
+}
+
+/* 词条出现动画 */
+@keyframes token-appear {
+    0% {
+        transform: translateY(20px) scale(0.8);
+        opacity: 0;
+    }
+    50% {
+        transform: translateY(-5px) scale(1.1);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+
 /* 代码卡片中的内联编辑按钮 */
+.function-buttons {
+    margin-left: 8px;
+    display: inline-flex;
+    gap: 6px;
+}
+
 .inline-edit-btn {
     padding: 2px 8px;
-    margin-left: 8px;
-    background: rgba(78, 204, 163, 0.2);
+    background: #4ecca3;
     border: 1px solid #4ecca3;
     border-radius: 4px;
-    color: #4ecca3;
+    color: #000;
     font-size: 11px;
+    font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
     vertical-align: middle;
 }
 
 .inline-edit-btn:hover {
-    background: rgba(78, 204, 163, 0.4);
+    background: #5effc3;
+    border-color: #5effc3;
     transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(78, 204, 163, 0.3);
+    box-shadow: 0 2px 6px rgba(78, 204, 163, 0.5);
+}
+
+.inline-unlock-btn {
+    padding: 2px 8px;
+    background: #ffd700;
+    border: 1px solid #ffd700;
+    border-radius: 4px;
+    color: #000;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    vertical-align: middle;
+}
+
+.inline-unlock-btn:hover {
+    background: #ffed4e;
+    border-color: #ffed4e;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(255, 215, 0, 0.3);
+}
+
+/* ========== 密钥破解窗口样式 ========== */
+.unlock-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.unlock-dialog {
+    width: 450px;
+    background: #16213e;
+    border: 3px solid #ffd700;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(255, 215, 0, 0.3);
+}
+
+.unlock-header {
+    padding: 20px;
+    background: #0f3460;
+    border-bottom: 2px solid #ffd700;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 10px 10px 0 0;
+}
+
+.unlock-header h3 {
+    margin: 0;
+    color: #ffd700;
+    font-size: 18px;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.unlock-content {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.unlock-message {
+    color: #eee;
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.key-name {
+    color: #ffd700;
+    font-weight: bold;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.unlock-hint {
+    color: #999;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 0;
+    font-style: italic;
+}
+
+.unlock-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.unlock-btn {
+    background: #ffd700;
+    color: #1a1a2e;
+}
+
+.unlock-btn:hover {
+    background: #ffed4e;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 215, 0, 0.4);
 }
 
 /* ========== 函数编辑窗口样式 ========== */
@@ -959,6 +1242,12 @@ canvas {
     color: #4ecca3;
 }
 
+.editor-token.token-attr {
+    background: rgba(138, 180, 248, 0.3);
+    border: 1px solid #8ab4f8;
+    color: #8ab4f8;
+}
+
 .editor-token:hover {
     transform: translateY(-2px);
     box-shadow: 0 2px 8px rgba(78, 204, 163, 0.4);
@@ -1009,12 +1298,21 @@ canvas {
 
 .action-btn {
     padding: 10px 24px;
-    border: none;
+    background: #4ecca3;
+    border: 1px solid #4ecca3;
     border-radius: 6px;
+    color: #000;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.3s;
     font-size: 14px;
+}
+
+.action-btn:hover {
+    background: #5effc3;
+    border-color: #5effc3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(78, 204, 163, 0.5);
 }
 
 .cancel-btn {

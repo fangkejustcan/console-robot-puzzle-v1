@@ -41,7 +41,7 @@ const ALEX_BASE_SYSTEM_PROMPT = `你是Alex，一位见过无数诡异代码的�
 AlexEdit(objectName, functionName, newCode, newDescription)
 - objectName: 物体名称（如"PiggyBank"）
 - functionName: 函数名称（如"onClick"）
-- newCode: 新的完整函数代码（会直接覆盖原函数）
+- newCode: 新的完整函数代码（会直接覆盖原函数）**必须用反引号包裹**
 - newDescription: 新的自然语言描述（可选，格式如：<func>点击时</func>：<func>生成</func>10个<class>金币</class>）
 
 ## AlexEdit使用示例
@@ -56,28 +56,36 @@ addSystemMessage('存钱罐掉出了一枚硬币！');
 \`\`\`
 
 要批量生成10个硬币，直接写完整的新函数和描述：
-AlexEdit("PiggyBank", "onClick", "for(let i=0; i<10; i++) { let coinX = this.x + random(-30, 30); let coinY = this.y + this.height/2 + random(20, 50); let coin = new Coin(coinX, coinY); gameState.objects.push(coin); }", "<func>点击时</func>：<func>生成</func>10个<class>金币</class>")
+AlexEdit("PiggyBank", "onClick", \`for(let i=0; i<10; i++) { let coinX = this.x + random(-30, 30); let coinY = this.y + this.height/2 + random(20, 50); let coin = new Coin(coinX, coinY); gameState.objects.push(coin); }\`, "<func>点击时</func>：<func>生成</func>10个<class>金币</class>")
+
+要修改火柴碰撞逻辑，每次显示2个字符：
+AlexEdit("Letter", "onCollide", \`if (arg0.name && arg0.name.startsWith('Match')) { if (this.revealedCount < this.hiddenText.length) { this.revealedCount = Math.min(this.revealedCount + 2, this.hiddenText.length); let index = gameState.objects.indexOf(arg0); if (index > -1) { gameState.objects.splice(index, 1); } } }\`, "<func>碰撞时</func>：<func>显示</func>2个<func>隐藏文字</func>")
 
 ## 重要提示
 1. 直接在回复中写 AlexEdit(...) 命令，不要放在代码块中
 2. newCode 是完整的函数体代码，会完全替换原函数
-3. newDescription 必须使用<func>和<class>标签标记词条，这样玩家可以看到并收集这些词条
-4. 每次AlexEdit后，系统会显示成功或错误信息，并更新场景中的代码卡片显示
-5. 只能修改权限为4的函数
-6. **重要**：newCode中避免使用任何引号(单引号或双引号)，包括字符串字面量
-   - 如果必须使用addSystemMessage，就省略它，让代码更简洁
-   - 专注于核心逻辑，不要添加消息提示
+3. **关键**：newCode 参数必须用反引号\`包裹，这样代码中的单引号和双引号才不会出问题
+4. newDescription 必须使用<func>、<class>和<attr>标签标记词条，这样玩家可以看到并收集这些词条
+5. 每次AlexEdit后，系统会显示成功或错误信息，并更新场景中的代码卡片显示
+6. 只能修改权限为4的函数
 
 ## 自然语言描述格式要求
 描述必须使用XML标签标记词条：
 - <func>函数名或动作</func>：标记函数相关的词条（显示为绿色）
 - <class>类名</class>：标记类名词条（显示为青色）
+- <attr>属性名</attr>：标记对象属性（显示为淡蓝色）
 - 其他文字：作为连接词，不需要标签
 
 示例：
 - "<func>点击时</func>：<func>生成</func>一个<class>金币</class>"
-- "<func>拖动时</func>：<func>移动</func>位置"
-- "<func>碰撞时</func>：<func>显示</func><func>隐藏文字</func>"
+- "<func>点击时</func>：设置<attr>可拖拽</attr>"
+- "<func>碰撞时</func>：<attr>HP</attr><func>减少</func>1"
+- "<func>点击时</func>：<attr>旋转</attr><func>增加</func>90度"
+
+重要区分：
+- 函数/动作用<func>：生成、显示、检查、增加、减少等
+- 类名用<class>：金币、火柴、存钱罐等
+- 属性用<attr>：HP、密码、可拖拽、旋转、隐藏文字等
 
 # 重要规则
 1. **严格限制**：只讨论"当前已发现的代码信息"中的内容，别瞎编
@@ -131,11 +139,20 @@ function initAlex() {
 function buildSystemPrompt() {
     let discoveredCodeText = '';
 
-    if (Object.keys(gameState.discoveredCode).length === 0) {
+    // 只显示已分析过的物体（在discoveredCode中有记录的）
+    const discoveredObjects = Object.keys(gameState.discoveredCode);
+
+    if (discoveredObjects.length === 0) {
         discoveredCodeText = '还没有发现任何代码信息。等待玩家使用代码撕裂器。';
     } else {
-        for (let objName in gameState.discoveredCode) {
-            let codeInfo = gameState.discoveredCode[objName];
+        // 遍历已发现的物体，实时获取最新权限信息
+        for (let objName of discoveredObjects) {
+            const obj = gameState.objects.find(o => o.name === objName);
+            if (!obj) continue; // 物体已被删除
+
+            // 实时获取最新的函数信息（权限可能已改变）
+            const codeInfo = obj.getFunctionInfo();
+
             discoveredCodeText += `\n\n## ${objName}`;
 
             // 添加类名信息
@@ -157,6 +174,11 @@ function buildSystemPrompt() {
                 if (funcInfo.body) {
                     discoveredCodeText += `函数体:\n\`\`\`javascript\n${funcInfo.body}\n\`\`\`\n`;
                 }
+
+                // 添加自然语言描述（如果有）
+                if (funcInfo.naturalDescription) {
+                    discoveredCodeText += `自然语言描述: ${funcInfo.naturalDescription}\n`;
+                }
             }
         }
     }
@@ -168,7 +190,8 @@ function buildSystemPrompt() {
 async function sendMessage(messageText = null, showInUI = true) {
     let message;
 
-    if (messageText) {
+    // 检查messageText是否是字符串（防止事件对象被误传入）
+    if (typeof messageText === 'string' && messageText) {
         // 从代码调用，使用传入的消息
         message = messageText;
     } else {
@@ -216,18 +239,40 @@ async function sendMessage(messageText = null, showInUI = true) {
 
     } catch (error) {
         loadingMsg.remove();
-        addAlexMessage(`抱歉，我遇到了一个错误: ${error.message}`);
+
+        // 提供更友好的错误消息
+        let errorMsg = '抱歉，我遇到了一个错误';
+        if (error.name === 'AbortError') {
+            errorMsg = '请求超时了，网络可能不太稳定。已经尝试重连了3次。';
+        } else if (error.message.includes('ERR_CONNECTION_RESET') || error.message.includes('Failed to fetch')) {
+            errorMsg = '网络连接中断了，已经尝试重连了3次。请检查网络连接或稍后再试。';
+        } else {
+            errorMsg = `抱歉，我遇到了一个错误: ${error.message}`;
+        }
+
+        addAlexMessage(errorMsg);
         console.error('DeepSeek API Error:', error);
     }
 }
 
-// 调用DeepSeek API
-async function callDeepSeekAPI() {
+// 调用DeepSeek API（带重试机制）
+async function callDeepSeekAPI(retryCount = 0) {
+    const MAX_RETRIES = 3;
+    const TIMEOUT_MS = 30000; // 30秒超时
+
     // 更新系统提示词（包含最新发现的代码）
     conversationHistory[0] = {
         role: 'system',
         content: buildSystemPrompt()
     };
+
+    // 限制对话历史长度（保留系统提示 + 最近20条消息）
+    if (conversationHistory.length > 21) {
+        conversationHistory = [
+            conversationHistory[0], // 保留系统提示
+            ...conversationHistory.slice(-20) // 保留最近20条
+        ];
+    }
 
     // 准备请求数据
     const requestData = {
@@ -243,52 +288,77 @@ async function callDeepSeekAPI() {
     console.log('请求数据:', JSON.stringify(requestData, null, 2));
     console.log('消息数量:', conversationHistory.length);
     console.log('最新用户消息:', conversationHistory[conversationHistory.length - 1]);
-    console.log('==========================================');
-
-    const response = await fetch(CORS_PROXY + encodeURIComponent(DEEPSEEK_API_URL), {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-        },
-        body: JSON.stringify(requestData)
-    });
-
-    if (!response.ok) {
-        console.error('========== DeepSeek API 错误 ==========');
-        console.error('状态码:', response.status);
-        console.error('状态文本:', response.statusText);
-        const errorText = await response.text();
-        console.error('错误响应:', errorText);
-        console.error('======================================');
-        throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
-    }
-
-    const responseData = await response.json();
-
-    // 记录接收的完整响应
-    console.log('========== 从 DeepSeek API 接收 ==========');
-    console.log('完整响应:', JSON.stringify(responseData, null, 2));
-    if (responseData.choices && responseData.choices[0]) {
-        console.log('AI回复内容:', responseData.choices[0].message.content);
-        console.log('完成原因:', responseData.choices[0].finish_reason);
-    }
-    if (responseData.usage) {
-        console.log('Token使用:', responseData.usage);
+    if (retryCount > 0) {
+        console.log('重试次数:', retryCount);
     }
     console.log('==========================================');
 
-    return responseData;
+    try {
+        // 创建带超时的fetch请求
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+        const response = await fetch(CORS_PROXY + encodeURIComponent(DEEPSEEK_API_URL), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+            },
+            body: JSON.stringify(requestData),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            console.error('========== DeepSeek API 错误 ==========');
+            console.error('状态码:', response.status);
+            console.error('状态文本:', response.statusText);
+            const errorText = await response.text();
+            console.error('错误响应:', errorText);
+            console.error('======================================');
+            throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+        }
+
+        const responseData = await response.json();
+
+        // 记录接收的完整响应
+        console.log('========== 从 DeepSeek API 接收 ==========');
+        console.log('完整响应:', JSON.stringify(responseData, null, 2));
+        if (responseData.choices && responseData.choices[0]) {
+            console.log('AI回复内容:', responseData.choices[0].message.content);
+            console.log('完成原因:', responseData.choices[0].finish_reason);
+        }
+        if (responseData.usage) {
+            console.log('Token使用:', responseData.usage);
+        }
+        console.log('==========================================');
+
+        return responseData;
+
+    } catch (error) {
+        console.error('API调用出错:', error.name, error.message);
+
+        // 如果是网络错误且未达到最大重试次数，则重试
+        if ((error.name === 'AbortError' || error.message.includes('ERR_CONNECTION_RESET') || error.message.includes('Failed to fetch')) && retryCount < MAX_RETRIES) {
+            console.log(`网络错误，${2}秒后进行第 ${retryCount + 1} 次重试...`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // 等待2秒
+            return callDeepSeekAPI(retryCount + 1);
+        }
+
+        // 达到最大重试次数或非网络错误，抛出错误
+        throw error;
+    }
 }
 
 // 处理AlexEdit命令
 function processAlexEditCommands(text) {
     console.log('处理Alex回复，查找AlexEdit命令:', text);
 
-    // 修改正则表达式：匹配3个或4个参数
-    // AlexEdit(objectName, functionName, newCode) 或
-    // AlexEdit(objectName, functionName, newCode, newDescription)
-    const regex = /AlexEdit\s*\(\s*["'`](.*?)["'`]\s*,\s*["'`](.*?)["'`]\s*,\s*["'`]([\s\S]*?)["'`](?:\s*,\s*["'`]([\s\S]*?)["'`])?\s*\)/g;
+    // 修改正则表达式：
+    // 第1、2个参数用任意引号，第3个参数(代码)必须用反引号，第4个参数用任意引号
+    // AlexEdit("objectName", "functionName", `code`, "description")
+    const regex = /AlexEdit\s*\(\s*["'`](.*?)["'`]\s*,\s*["'`](.*?)["'`]\s*,\s*`([\s\S]*?)`(?:\s*,\s*["'`]([\s\S]*?)["'`])?\s*\)/g;
     let match;
     let foundCommands = false;
 
