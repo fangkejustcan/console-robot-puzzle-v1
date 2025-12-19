@@ -656,6 +656,19 @@ canvas {
     box-shadow: 0 4px 8px rgba(255, 215, 0, 0.3);
 }
 
+/* 红色密钥样式 */
+.token-item.token-key-red {
+    background: rgba(255, 0, 0, 0.2);
+    border: 1px solid #ff4444;
+    color: #ff4444;
+}
+
+.token-item.token-key-red:hover {
+    background: rgba(255, 0, 0, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(255, 0, 0, 0.3);
+}
+
 /* 物品数量角标 */
 .item-count-badge {
     position: absolute;

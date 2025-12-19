@@ -70,6 +70,47 @@ function initGameObjects() {
     // 陀螺 - 放在中间
     let gyro = new Gyro(width / 2, height / 2 + 150);
     gameState.objects.push(gyro);
+
+    // ===== 第二关物体（初始隐藏）=====
+    // 青蛙三圣 - 等边三角形排列
+    let centerX = width / 2;
+    let centerY = height / 2 - 50;
+    let radius = 150;
+
+    // 生青蛙 - 顶点（朝上）
+    let frogLife = new FrogLife(
+        centerX + radius * cos(-PI / 2),
+        centerY + radius * sin(-PI / 2)
+    );
+    gameState.objects.push(frogLife);
+
+    // 死青蛙 - 左下
+    let frogDeath = new FrogDeath(
+        centerX + radius * cos(-PI / 2 + TWO_PI / 3),
+        centerY + radius * sin(-PI / 2 + TWO_PI / 3)
+    );
+    gameState.objects.push(frogDeath);
+
+    // 梦青蛙 - 右下
+    let frogDream = new FrogDream(
+        centerX + radius * cos(-PI / 2 + TWO_PI * 2 / 3),
+        centerY + radius * sin(-PI / 2 + TWO_PI * 2 / 3)
+    );
+    gameState.objects.push(frogDream);
+
+    // 电脑 - 放在右下角
+    let computer = new Computer(width - 150, height - 120);
+    gameState.objects.push(computer);
+}
+
+// 显示第二关物体
+function showStage2Objects() {
+    for (let obj of gameState.objects) {
+        if (obj instanceof Frog || obj instanceof Computer) {
+            obj.visible = true;
+        }
+    }
+    addSystemMessage('第二关物体已显示！');
 }
 
 // p5.js draw函数
@@ -94,15 +135,15 @@ function draw() {
         }
 
         push();
-        // 在代码撕裂器模式下，给物体添加强烈的绿色色调和遮罩
-        if (gameState.mode === 'ripper') {
+        // 在代码撕裂器模式下，给可见物体添加强烈的绿色色调和遮罩
+        if (gameState.mode === 'ripper' && obj.visible !== false) {
             tint(80, 255, 80, 180); // 强烈的绿色色调
         }
         obj.draw();
         pop();
 
-        // 在代码撕裂器模式下，给每个物体添加绿色半透明遮罩
-        if (gameState.mode === 'ripper') {
+        // 在代码撕裂器模式下，给每个可见物体添加绿色半透明遮罩
+        if (gameState.mode === 'ripper' && obj.visible !== false) {
             push();
             fill(0, 255, 0, 80); // 绿色半透明遮罩
             rectMode(CENTER);
@@ -133,6 +174,9 @@ function draw() {
     // 检查碰撞
     checkCollisions();
 
+    // 检查电脑进度
+    checkComputerProgress();
+
     // 清理超出屏幕的物体
     cleanupOffscreenObjects();
 
@@ -147,11 +191,33 @@ function checkCollisions() {
             let obj1 = gameState.objects[i];
             let obj2 = gameState.objects[j];
 
+            // 跳过不可见的物体
+            if (obj1.visible === false || obj2.visible === false) {
+                continue;
+            }
+
             if (obj1.collidesWith(obj2)) {
                 obj1.executeFunction('onCollide', obj2);
                 obj2.executeFunction('onCollide', obj1);
             }
         }
+    }
+}
+
+// 检查电脑进度（每帧调用）
+function checkComputerProgress() {
+    // 找到电脑对象
+    let computer = gameState.objects.find(obj => obj.name === 'Computer');
+    if (computer && computer.visible) {
+        // 每帧调用电脑的onProgress函数
+        computer.executeFunction('onProgress');
+    }
+
+    // 找到生青蛙对象
+    let frogLife = gameState.objects.find(obj => obj.name === 'FrogLife');
+    if (frogLife && frogLife.visible) {
+        // 每帧调用生青蛙的EatCoin函数
+        frogLife.executeFunction('EatCoin');
     }
 }
 
@@ -235,9 +301,9 @@ function removeHtmlTags(text) {
 
 // 更新代码覆盖层（在每帧调用）- 只更新位置，不重建DOM
 function updateCodeOverlay() {
-    // 为每个已发现代码的物体更新卡片位置
+    // 为每个已发现代码的物体更新卡片位置（跳过不可见的物体）
     for (let obj of gameState.objects) {
-        if (gameState.discoveredCode[obj.name] && gameState.codeCards[obj.name]) {
+        if (obj.visible !== false && gameState.discoveredCode[obj.name] && gameState.codeCards[obj.name]) {
             updateCodeCardPosition(obj);
         }
     }
@@ -994,7 +1060,11 @@ function setupToolbar() {
 // 显示所有代码卡片
 function showAllCodeCards() {
     for (let objectName in gameState.codeCards) {
-        gameState.codeCards[objectName].style.display = 'block';
+        // 找到对应的物体，检查是否可见
+        const obj = gameState.objects.find(o => o.name === objectName);
+        if (obj && obj.visible !== false) {
+            gameState.codeCards[objectName].style.display = 'block';
+        }
     }
 }
 
@@ -1159,7 +1229,12 @@ function updateInventoryUI() {
             });
         } else if (item.type === 'key') {
             // 密钥物品
-            itemElement.className = 'token-item token-key';
+            // 根据密钥颜色选择CSS类
+            let keyClass = 'token-item token-key';
+            if (item.value === '红色密钥') {
+                keyClass = 'token-item token-key token-key-red';
+            }
+            itemElement.className = keyClass;
 
             // 创建密钥内容容器
             const keyContent = document.createElement('span');
@@ -1626,8 +1701,20 @@ function openUnlockDialog(objectName, functionName) {
         permission: funcInfo.permission
     };
 
+    // 判断需要哪种密钥
+    let requiredKey = '黄色密钥';
+    if (obj instanceof Frog || obj instanceof Computer) {
+        requiredKey = '红色密钥';
+    }
+
     // 更新UI
     document.getElementById('unlockTitle').textContent = `破解 ${objectName}.${functionName}`;
+
+    // 更新密钥提示
+    const keyNameSpan = document.querySelector('.unlock-message .key-name');
+    if (keyNameSpan) {
+        keyNameSpan.textContent = `🔑 ${requiredKey}`;
+    }
 
     // 显示窗口
     document.getElementById('unlockDialogOverlay').style.display = 'flex';
@@ -1649,15 +1736,21 @@ function closeUnlockDialog() {
 function attemptUnlockWithKey(keyValue) {
     if (!currentUnlockingFunction) return;
 
-    // 检查是否是黄色密钥
-    if (keyValue !== '黄色密钥') {
-        addSystemMessage('❌ 此函数需要黄色密钥破解');
-        return;
-    }
-
     // 破解成功，升级权限
     const obj = gameState.objects.find(o => o.name === currentUnlockingFunction.objectName);
     if (!obj) return;
+
+    // 判断需要哪种密钥（第二关物体需要红色密钥，第一关物体需要黄色密钥）
+    let requiredKey = '黄色密钥';
+    if (obj instanceof Frog || obj instanceof Computer) {
+        requiredKey = '红色密钥';
+    }
+
+    // 检查密钥是否正确
+    if (keyValue !== requiredKey) {
+        addSystemMessage(`❌ 此函数需要${requiredKey}破解`);
+        return;
+    }
 
     // 找到真实的函数名（因为权限1的函数名可能是加密的）
     let realFunctionName = null;
@@ -1688,9 +1781,9 @@ function attemptUnlockWithKey(keyValue) {
     // 升级权限为4
     obj.permissions[realFunctionName] = PERMISSION.EDIT;
 
-    // 消耗一个黄色密钥
+    // 消耗一个密钥
     const keyItem = gameState.inventory.find(item =>
-        item.type === 'key' && item.value === '黄色密钥'
+        item.type === 'key' && item.value === keyValue
     );
     if (keyItem) {
         if (keyItem.count > 1) {
