@@ -707,15 +707,6 @@ class Computer extends GameObject {
                 dreamFrog.visible = true;
             }
 
-            // 重置电脑状态
-            this.progress = 0;
-            this.targetProgress = 0;
-            this.progressText = '生死无梦';
-            this.rotationSpeed = 0;
-            this.rotation = 0;
-            this.expanding = false;
-            this.progressAnimating = false;
-
             addSystemMessage('重置青蛙三圣！');
         `, PERMISSION.READ_BODY, '<func>点击时</func>：<func>重置</func><func>青蛙三圣</func>');
     }
