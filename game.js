@@ -75,7 +75,7 @@ function initGameObjects() {
     // 青蛙三圣 - 等边三角形排列
     let centerX = width / 2;
     let centerY = height / 2 - 50;
-    let radius = 150;
+    let radius = 180; // 增加20%距离
 
     // 生青蛙 - 顶点（朝上）
     let frogLife = new FrogLife(
@@ -105,12 +105,37 @@ function initGameObjects() {
 
 // 显示第二关物体
 function showStage2Objects() {
-    for (let obj of gameState.objects) {
-        if (obj instanceof Frog || obj instanceof Computer) {
-            obj.visible = true;
+    // 删除信纸和火柴
+    const toRemove = [];
+    for (let i = 0; i < gameState.objects.length; i++) {
+        let obj = gameState.objects[i];
+        if (obj instanceof Letter || obj instanceof Match) {
+            toRemove.push(i);
+            // 清理代码卡片
+            if (gameState.codeCards[obj.name]) {
+                removeCodeCard(obj.name);
+            }
         }
     }
-    addSystemMessage('第二关物体已显示！');
+
+    // 从后往前删除，避免索引错乱
+    for (let i = toRemove.length - 1; i >= 0; i--) {
+        gameState.objects.splice(toRemove[i], 1);
+    }
+
+    // 显示第二关物体并移动电脑位置
+    for (let obj of gameState.objects) {
+        if (obj instanceof Frog) {
+            obj.visible = true;
+        } else if (obj instanceof Computer) {
+            obj.visible = true;
+            // 移动电脑到原信纸下方的位置
+            obj.x = 200;
+            obj.y = height / 2 + 150;
+        }
+    }
+
+    addSystemMessage('第二关物体已显示！信纸和火柴已消失。');
 }
 
 // p5.js draw函数
@@ -1843,8 +1868,19 @@ function generateAndSendToAlex() {
         return;
     }
 
+    // 提取词条并获取映射信息
+    const tokenMappings = extractTokenMappings(newDesc);
+
     // 构造消息发送给Alex
-    const message = `请帮我修改 ${currentEditingFunction.objectName} 的 ${currentEditingFunction.functionName} 函数。新的功能描述是：${newDesc}`;
+    let message = `请帮我修改 ${currentEditingFunction.objectName} 的 ${currentEditingFunction.functionName} 函数。新的功能描述是：${newDesc}`;
+
+    // 如果有词条映射，附加到消息中
+    if (tokenMappings.length > 0) {
+        message += '\n\n[词条对应的实际代码名称]：\n';
+        for (let mapping of tokenMappings) {
+            message += `- ${mapping.token} → ${mapping.code}\n`;
+        }
+    }
 
     // 关闭编辑器
     closeFunctionEditor();
@@ -1853,6 +1889,75 @@ function generateAndSendToAlex() {
     sendPlayerMessage(message);
 
     addSystemMessage('已将修改请求发送给Alex');
+}
+
+// 词条到代码的映射表
+const TOKEN_MAPPING = {
+    // 类名映射
+    'class': {
+        '金币': 'Coin',
+        '存钱罐': 'PiggyBank',
+        '密码门': 'PasswordDoor',
+        '信纸': 'Letter',
+        '火柴': 'Match',
+        '陀螺': 'Gyro',
+        '青蛙': 'Frog (FrogLife/FrogDeath/FrogDream)',
+        '电脑': 'Computer'
+    },
+    // 函数/动作映射
+    'func': {
+        '生成': 'new ClassName(x, y); gameState.objects.push(obj)',
+        '删除': 'gameState.objects.splice(index, 1)',
+        '移动': 'this.x += dx; this.y += dy',
+        '旋转': 'this.rotation += angle',
+        '显示': 'this.revealedCount++',
+        '检查': 'if (condition)',
+        '增加': 'value += amount',
+        '减少': 'value -= amount',
+        '点击时': 'onClick 函数',
+        '碰撞时': 'onCollide 函数',
+        '每帧检测': '每帧自动调用',
+        '每秒杀死': '每秒自动调用',
+        '物体': 'gameState.objects 中的对象'
+    },
+    // 属性映射
+    'attr': {
+        '密码': 'this.password',
+        'HP': 'this.hp',
+        '可拖拽': 'this.draggable',
+        '旋转': 'this.rotation',
+        '隐藏文字': 'this.hiddenText'
+    }
+};
+
+// 提取词条并返回映射信息
+function extractTokenMappings(description) {
+    const mappings = [];
+    const foundTokens = new Set(); // 用于去重
+
+    // 匹配所有词条
+    const regex = /<(func|class|attr)>(.*?)<\/\1>/g;
+    let match;
+
+    while ((match = regex.exec(description)) !== null) {
+        const type = match[1]; // func, class, attr
+        const value = match[2]; // 词条内容
+
+        // 生成唯一标识，避免重复
+        const key = `${type}:${value}`;
+        if (foundTokens.has(key)) continue;
+        foundTokens.add(key);
+
+        // 查找映射
+        if (TOKEN_MAPPING[type] && TOKEN_MAPPING[type][value]) {
+            mappings.push({
+                token: `<${type}>${value}</${type}>`,
+                code: TOKEN_MAPPING[type][value]
+            });
+        }
+    }
+
+    return mappings;
 }
 
 // 发送玩家消息（从alex.js中移出来，或者调用alex.js的函数）

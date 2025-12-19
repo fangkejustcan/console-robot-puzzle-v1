@@ -495,7 +495,7 @@ class FrogLife extends Frog {
                     }
                 }
             }
-        `, PERMISSION.READ_NAME, '<func>EatCoin</func>：<func>移动</func>吃掉周围300范围的<class>金币</class>');
+        `, PERMISSION.READ_NAME, '<func>每帧检测</func>：<func>移动</func>吃掉周围300范围的<class>金币</class>');
     }
 }
 
@@ -507,10 +507,10 @@ class FrogDeath extends Frog {
 
         // 注册Kill函数 - 权限3（可读函数体）
         this.registerFunction('Kill', `
-            // 删除周围100范围内的所有物体
+            // 删除周围100范围内的所有物体（不包括电脑）
             let toRemove = [];
             for (let obj of gameState.objects) {
-                if (obj !== this) {
+                if (obj !== this && obj.constructor.name !== 'Computer') {
                     let d = dist(this.x, this.y, obj.x, obj.y);
                     if (d < 100) {
                         toRemove.push(obj);
@@ -532,7 +532,7 @@ class FrogDeath extends Frog {
             if (toRemove.length > 0) {
                 addSystemMessage(\`死青蛙杀死了 \${toRemove.length} 个物体！\`);
             }
-        `, PERMISSION.READ_BODY, '<func>Kill</func>：<func>删除</func>周围100范围的<func>物体</func>');
+        `, PERMISSION.READ_BODY, '<func>每秒杀死</func>：<func>删除</func>周围100范围的<func>物体</func>');
 
         // 注册onClick函数 - 权限4（可编辑）
         this.registerFunction('onClick', `
@@ -592,6 +592,14 @@ class Computer extends GameObject {
         this.expanding = false; // 是否正在扩展
         this.progressAnimating = false; // 是否正在进度动画
 
+        // 扩张动画相关
+        this.movingToCenter = false; // 是否正在移动到中央
+        this.targetX = 0; // 目标X坐标
+        this.targetY = 0; // 目标Y坐标
+        this.expandScale = 1; // 扩张倍数
+        this.initialWidth = 180; // 初始宽度
+        this.initialHeight = 150; // 初始高度
+
         // 注册onProgress函数 - 权限2（可读函数名）
         this.registerFunction('onProgress', `
             if (this.targetProgress === 0) {
@@ -648,8 +656,13 @@ class Computer extends GameObject {
                         this.targetProgress = 100;
                         this.progressText = '';
                         this.progressAnimating = true;
-                        this.expanding = true;
-                        addSystemMessage('进度100%：电脑开始扩张...');
+
+                        // 启动扩张动画：先移动到中央
+                        this.movingToCenter = true;
+                        this.targetX = width / 2;
+                        this.targetY = height / 2;
+
+                        addSystemMessage('进度100%：电脑开始移动到中央...');
                     }
                 }
             }
@@ -665,7 +678,7 @@ class Computer extends GameObject {
             // 重置位置为等边三角形
             let centerX = width / 2;
             let centerY = height / 2 - 50;
-            let radius = 150;
+            let radius = 180; // 增加20%距离
 
             // 如果青蛙不存在，重新创建
             if (!lifeFrog) {
@@ -724,42 +737,69 @@ class Computer extends GameObject {
                 }
             }
         }
+
+        // 移动到中央的动画
+        if (this.movingToCenter) {
+            // 取消旋转
+            this.rotation = 0;
+            this.rotationSpeed = 0;
+
+            const dx = this.targetX - this.x;
+            const dy = this.targetY - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > 5) {
+                // 平滑移动，每帧移动距离的10%
+                this.x += dx * 0.1;
+                this.y += dy * 0.1;
+            } else {
+                // 到达中央，开始扩张
+                this.x = this.targetX;
+                this.y = this.targetY;
+                this.movingToCenter = false;
+                this.expanding = true;
+                addSystemMessage('电脑开始扩张吞噬世界...');
+            }
+        }
+
+        // 扩张动画
+        if (this.expanding && !this.movingToCenter) {
+            // 逐渐增大尺寸
+            this.expandScale += 0.05; // 每帧增加5%
+            this.width = this.initialWidth * this.expandScale;
+            this.height = this.initialHeight * this.expandScale;
+
+            // 吞噬其他物体（检测碰撞）
+            const toRemove = [];
+            for (let i = 0; i < gameState.objects.length; i++) {
+                let obj = gameState.objects[i];
+                if (obj !== this && obj.visible !== false) {
+                    // 检测是否与电脑碰撞
+                    if (this.collidesWith(obj)) {
+                        toRemove.push(i);
+                        // 清理代码卡片
+                        if (gameState.codeCards[obj.name]) {
+                            removeCodeCard(obj.name);
+                        }
+                    }
+                }
+            }
+
+            // 删除被吞噬的物体
+            for (let i = toRemove.length - 1; i >= 0; i--) {
+                gameState.objects.splice(toRemove[i], 1);
+            }
+
+            // 当尺寸足够大时，完全覆盖屏幕
+            if (this.width > width * 2 && this.height > height * 2) {
+                // 扩张完成，可以显示胜利画面或其他
+                addSystemMessage('世界被电脑吞噬...');
+            }
+        }
     }
 
     render() {
         if (!this.visible) return;
-
-        // 如果正在扩张，覆盖整个屏幕
-        if (this.expanding) {
-            // 绘制扩张效果（在世界坐标系下）
-            push();
-            resetMatrix(); // 重置变换矩阵
-            fill(0);
-            rect(0, 0, width, height);
-
-            // 显示100%进度条
-            let barWidth = 400;
-            let barHeight = 40;
-            let barX = (width - barWidth) / 2;
-            let barY = (height - barHeight) / 2;
-
-            // 进度条背景
-            fill(50);
-            rect(barX, barY, barWidth, barHeight);
-
-            // 进度条填充
-            fill(0, 255, 0);
-            rect(barX, barY, barWidth, barHeight);
-
-            // 进度文字
-            fill(255);
-            textAlign(CENTER, CENTER);
-            textSize(24);
-            text('100%', width / 2, height / 2);
-
-            pop();
-            return;
-        }
 
         // 应用旋转
         if (this.rotationSpeed > 0) {
@@ -827,6 +867,8 @@ class Computer extends GameObject {
         textSize(16);
         fill(255, 255, 100);
         text(Math.floor(this.progress) + '%', 0, barY + 28);
+
+        
     }
 
     draw() {
