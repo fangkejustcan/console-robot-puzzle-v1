@@ -746,6 +746,30 @@ Alex在对话中直接写出此命令，系统会自动执行
     - 修改generateAndSendToAlex()函数：提取词条 → 查找映射 → 附加到消息
     - 消息格式："请帮我修改...新的功能描述是：xxx\n\n[词条对应的实际代码名称]：\n- <class>金币</class> → Coin\n- <func>生成</func> → new ClassName..."
   - **效果**：Alex只能看到当前编辑用到的词条映射，不会提前知道所有映射，保持解谜性
+- ✅ **代码撕裂器交互优化**:
+  - **问题**：每次点击物体都会调用AI分析，重复且浪费
+  - **优化1 - 只分析一次**：
+    - 检查物体是否已在discoveredCode中
+    - 已分析过的物体：直接展开卡片，不调用AI
+    - 未分析的物体：执行完整分析流程（流动字符+AI分析+词条收集）
+  - **优化2 - 视图聚焦**：
+    - 添加expandCardAndMinimizeOthers()函数
+    - 点击物体时：展开该物体的代码卡片，最小化其他所有卡片
+    - 效果：视图更清晰，专注于当前查看的物体
+  - **技术实现**：
+    - 修改ripObject()函数添加已分析检查
+    - 遍历gameState.codeCards，调用toggleCardMinimize()控制展开/最小化
+  - **效果**：减少AI调用，提升性能，视图更清晰专注
+- ✅ **代码撕裂器点击穿透修复**:
+  - **问题**：点击代码卡片上的按钮时，点击会穿透到下层的游戏物体，触发不期望的交互
+  - **原因**：mousePressed()函数没有区分点击是在DOM元素（代码卡片）还是canvas上
+  - **技术实现**：
+    - 添加isClickOnCodeCard()函数检测点击是否在代码卡片上
+    - 关键：mouseX/mouseY是canvas坐标，需要转换为页面坐标才能与getBoundingClientRect()比较
+    - 转换公式：`pageX = canvasRect.left + canvasX; pageY = canvasRect.top + canvasY`
+    - 修改mousePressed()：在处理游戏物体点击前先检查是否点击了代码卡片
+    - 如果点击在代码卡片上，return早退，让DOM事件系统处理
+  - **效果**：点击代码卡片上的按钮、词条等元素时，不再触发下层游戏物体的交互，交互更真实
 
 ## Git仓库
 - GitHub: https://github.com/fangkejustcan/console-robot-puzzle-v1

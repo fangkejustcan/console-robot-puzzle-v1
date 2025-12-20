@@ -677,6 +677,12 @@ function mousePressed() {
     // 如果正在分析，禁止其他操作
     if (gameState.analyzingObject) return;
 
+    // 在代码撕裂器模式下，检查点击是否在代码卡片上
+    if (gameState.mode === 'ripper' && isClickOnCodeCard(mouseX, mouseY)) {
+        // 点击在代码卡片上，不处理物体点击，让DOM事件处理
+        return;
+    }
+
     // 检测双击
     const currentTime = millis();
     const isDoubleClick = (currentTime - gameState.lastClickTime) < 300;
@@ -708,6 +714,32 @@ function mousePressed() {
     }
 
     gameState.lastClickTime = currentTime;
+}
+
+// 检查点击是否在代码卡片上
+function isClickOnCodeCard(canvasX, canvasY) {
+    // 获取canvas元素的位置
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return false;
+
+    const canvasRect = canvas.getBoundingClientRect();
+
+    // 将canvas坐标转换为页面坐标
+    const pageX = canvasRect.left + canvasX;
+    const pageY = canvasRect.top + canvasY;
+
+    // 检查是否在任何代码卡片上
+    for (let objectName in gameState.codeCards) {
+        const card = gameState.codeCards[objectName];
+        const rect = card.getBoundingClientRect();
+
+        // 检查页面坐标是否在卡片范围内
+        if (pageX >= rect.left && pageX <= rect.right &&
+            pageY >= rect.top && pageY <= rect.bottom) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // 鼠标拖动事件
@@ -1031,6 +1063,17 @@ function ripObject(obj) {
     // 如果已经在分析中，忽略
     if (gameState.analyzingObject) return;
 
+    // 检查是否已经分析过
+    const alreadyDiscovered = gameState.discoveredCode[obj.name] !== undefined;
+
+    if (alreadyDiscovered) {
+        // 已经分析过，直接展开此卡片并最小化其他卡片
+        expandCardAndMinimizeOthers(obj.name);
+        addSystemMessage(`查看 ${obj.name} 的代码`);
+        return;
+    }
+
+    // 第一次分析，执行完整流程
     // 设置正在分析的物品
     gameState.analyzingObject = obj;
     gameState.analyzeStartTime = millis();
@@ -1049,6 +1092,11 @@ function ripObject(obj) {
     // 立即创建代码卡片
     createCodeCardForObject(obj);
 
+    // 展开当前卡片，最小化其他卡片
+    setTimeout(() => {
+        expandCardAndMinimizeOthers(obj.name);
+    }, 50);
+
     // 等待DOM渲染完成后再自动收集词条
     setTimeout(() => {
         autoCollectTokensFromObject(obj);
@@ -1056,6 +1104,26 @@ function ripObject(obj) {
 
     // 通知Alex进行分析
     notifyAlexCodeDiscovered(codeInfo);
+}
+
+// 展开指定卡片，最小化其他卡片
+function expandCardAndMinimizeOthers(targetObjectName) {
+    for (let objectName in gameState.codeCards) {
+        const card = gameState.codeCards[objectName];
+        const toggleBtn = card.querySelector('.card-toggle-btn');
+
+        if (objectName === targetObjectName) {
+            // 展开目标卡片
+            if (card.classList.contains('minimized')) {
+                toggleCardMinimize(card, toggleBtn);
+            }
+        } else {
+            // 最小化其他卡片
+            if (!card.classList.contains('minimized')) {
+                toggleCardMinimize(card, toggleBtn);
+            }
+        }
+    }
 }
 
 // 设置工具栏
